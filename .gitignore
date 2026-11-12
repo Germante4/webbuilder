@@ -1,0 +1,87 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+
+### API keys and environment variables ###
+.env
+.env.*
+!.env.example
+application-local.properties
+application-secret.properties
+
+### Node.js / React ###
+node_modules/
+dist/
+coverage/
+*.log
+
+### Stitch generated files ###
+stitch-service/generated-results/
+
+### Local databases and backups ###
+*.sqlite
+*.sqlite3
+*.db
+*.sql.gz
+*.dump
+
+### Operating system ###
+.DS_Store
+Thumbs.db
+
+
+### Local secrets ###
+stitch-token.local
+*.local
+.env
+.env.*
+!.env.example
+
+### User uploaded files ###
+uploads/
+
+### Generated Stitch websites ###
+stitch-service/generated-results/
+
+### Node.js and React ###
+node_modules/
+dist/
+coverage/
+
+### Logs ###
+*.log
+
+### Database backups ###
+*.dump
+*.sql.gz
