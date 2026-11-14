@@ -2,10 +2,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
+
 import type { ProjectSummary } from "../services/requirementService";
 import type { DesignSummary } from "../services/designSummaryService";
 import type { ProjectAssetUploadResponse } from "../services/projectAssetService";
 import type { DesignDirection } from "../services/designDirectionService";
+import { getProjectDraft } from "../services/projectDraftService";
 
 import DesktopWebsitePreview from "../pages/DesktopWebsitePreview";
 import { getToken } from "../services/authService";
@@ -14,6 +16,7 @@ import {
   generateStitchPrompt,
   generateStitchDesign,
   type StitchGenerationResponse,
+  type ProjectContactInformation,
 } from "../services/stitchService";
 
 import "../styles/ProjectPreviewPage.css";
@@ -347,6 +350,39 @@ async function chooseDesign(
 // COMPONENT
 // ========================================
 
+function isProjectContactInformation(
+  value: unknown
+): value is ProjectContactInformation {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const contact = value as Record<string, unknown>;
+
+  return (
+    typeof contact.email === "string" &&
+    typeof contact.phone === "string" &&
+    typeof contact.address === "string" &&
+    typeof contact.instagram === "string" &&
+    typeof contact.facebook === "string" &&
+    Array.isArray(contact.additionalContacts) &&
+    contact.additionalContacts.every(
+      (item: unknown) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          return false;
+        }
+
+        const additional = item as Record<string, unknown>;
+
+        return (
+          typeof additional.label === "string" &&
+          typeof additional.value === "string"
+        );
+      }
+    )
+  );
+}
+
 function ProjectPreviewPage() {
   const location = useLocation();
 
@@ -641,14 +677,22 @@ function ProjectPreviewPage() {
           state.uploadedAssets ?? null,
       });
 
-      const generated = await generateStitchDesign({
-        prompt,
-        projectName: "Nauja svetainė",
-        projectDescription: null,
-        websiteCategory:
-          state.websiteCategory ?? "SERVICES",
-        webBuilderProjectId,
-      });
+      const savedContact = getProjectDraft().fields?.projectContact;
+
+const contactInformation: ProjectContactInformation | null =
+  isProjectContactInformation(savedContact)
+    ? savedContact
+    : null;
+
+const generated = await generateStitchDesign({
+  prompt,
+  projectName: "Nauja svetainė",
+  projectDescription: null,
+  websiteCategory:
+    state.websiteCategory ?? "SERVICES",
+  webBuilderProjectId,
+  contactInformation,
+});
 
       if (generated.webBuilderProjectId == null) {
         throw new Error(
@@ -857,8 +901,8 @@ function ProjectPreviewPage() {
         </Link>
 
         <div className="stitch-preview-step">
-          05 / Dizaino peržiūra
-        </div>
+  07 / Dizaino peržiūra
+</div>
       </header>
 
       <main className="stitch-preview-main">

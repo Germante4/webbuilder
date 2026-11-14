@@ -202,7 +202,7 @@ function ProjectValuePage() {
         },
       });
 
-      navigate("/projects/new/design", {
+      navigate("/projects/new/contact", {
         state: {
           websiteCategory,
           websiteFormat,

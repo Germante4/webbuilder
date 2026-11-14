@@ -209,14 +209,14 @@ function ProjectDirectionsPage() {
         </Link>
 
         <span className="directions-step">
-          05 / Kryptis
-        </span>
+  06 / Kryptis
+</span>
       </header>
 
       <main className="directions-main">
         <section className="directions-intro">
           <p className="directions-eyebrow">
-            05 / PASIRINKITE KRYPTĮ
+            06 / PASIRINKITE KRYPTĮ
           </p>
 
           <h1>

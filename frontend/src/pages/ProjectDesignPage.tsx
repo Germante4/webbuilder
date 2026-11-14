@@ -285,7 +285,7 @@ navigate("/projects/new/directions", {
     <div className="design-page">
       <header className="design-header">
         <Link
-          to="/projects/new/value"
+  to="/projects/new/contact"
           state={{
             websiteCategory,
             websiteFormat,
@@ -299,8 +299,8 @@ navigate("/projects/new/directions", {
         <div className="design-logo">WebBuilder</div>
 
         <div className="design-step">
-          03 / Vizualinė kryptis
-        </div>
+  05 / Vizualinė kryptis
+</div>
       </header>
 
       <main className="design-main">
@@ -310,7 +310,7 @@ navigate("/projects/new/directions", {
           </div>
 
           <h1>
-            Kaip turėtų atrodytu jūsų svetainė?
+            Kaip turėtų atrodyti jūsų svetainė?
           </h1>
 
           <p className="design-description">

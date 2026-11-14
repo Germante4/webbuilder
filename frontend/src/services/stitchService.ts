@@ -17,6 +17,17 @@ export interface StitchGenerationResponse {
   image: unknown;
   webBuilderProjectId?: number;
 }
+export interface ProjectContactInformation {
+  email: string;
+  phone: string;
+  address: string;
+  instagram: string;
+  facebook: string;
+  additionalContacts: {
+    label: string;
+    value: string;
+  }[];
+}
 
 // ========================================
 // PROMPT REQUEST
@@ -44,6 +55,7 @@ export interface StitchDesignRequest {
   projectDescription: string | null;
   websiteCategory: string;
   webBuilderProjectId?: number | null;
+  contactInformation?: ProjectContactInformation | null;
 }
 
 // ========================================
@@ -118,13 +130,15 @@ export async function generateStitchDesign(
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        prompt: request.prompt,
-        projectName: request.projectName,
-        projectDescription: request.projectDescription,
-        websiteCategory: request.websiteCategory,
-        webBuilderProjectId:
-          request.webBuilderProjectId ?? null,
-      }),
+  prompt: request.prompt,
+  projectName: request.projectName,
+  projectDescription: request.projectDescription,
+  websiteCategory: request.websiteCategory,
+  webBuilderProjectId:
+    request.webBuilderProjectId ?? null,
+  contactInformation:
+    request.contactInformation ?? null,
+}),
     }
   );
 

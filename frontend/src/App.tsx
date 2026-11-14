@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import HomePage from "./pages/HomePage";
@@ -7,6 +8,7 @@ import DashboardPage from "./pages/DashboardPage";
 import CreateProjectPage from "./pages/CreateProjectPage";
 import ProjectDetailsPage from "./pages/ProjectDetailsPage";
 import ProjectValuePage from "./pages/ProjectValuePage";
+import ProjectContactPage from "./pages/ProjectContactPage";
 import ProjectDesignPage from "./pages/ProjectDesignPage";
 import ProjectDirectionsPage from "./pages/ProjectDirectionsPage";
 import ProjectPreviewPage from "./pages/ProjectPreviewPage";
@@ -36,17 +38,24 @@ function App() {
         />
 
         <Route
+          path="/projects/new/contact"
+          element={<ProjectContactPage />}
+        />
+
+        <Route
           path="/projects/new/design"
           element={<ProjectDesignPage />}
         />
+
         <Route
-  path="/projects/new/directions"
-  element={<ProjectDirectionsPage />}
-/>
-<Route
-  path="/projects/new/preview"
-  element={<ProjectPreviewPage />}
-/>
+          path="/projects/new/directions"
+          element={<ProjectDirectionsPage />}
+        />
+
+        <Route
+          path="/projects/new/preview"
+          element={<ProjectPreviewPage />}
+        />
       </Routes>
     </BrowserRouter>
   );
