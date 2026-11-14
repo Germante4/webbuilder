@@ -1,7 +1,7 @@
 
 import express from "express";
 import * as cheerio from "cheerio";
-import { stitch } from "@google/stitch-sdk";
+import { stitch, Stitch, StitchToolClient } from "@google/stitch-sdk";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,17 @@ const DATA_DIR = path.join(
 await mkdir(DATA_DIR, { recursive: true });
 
 let generationInProgress = false;
+function createRefinementClient() {
+    const client = new StitchToolClient({
+        apiKey: API_KEY,
+        baseUrl: process.env.STITCH_HOST || "https://stitch.googleapis.com/mcp"
+    });
+
+    return {
+        client,
+        stitchInstance: new Stitch(client)
+    };
+}
 
 // ========================================
 // AUTHORIZATION
@@ -1059,6 +1070,8 @@ app.post("/refine", authorize, async (req, res) => {
 
     generationInProgress = true;
 
+    const { client, stitchInstance } = createRefinementClient();
+
     try {
         const originalMeta = await loadMeta(screenId);
 
@@ -1081,7 +1094,7 @@ app.post("/refine", authorize, async (req, res) => {
             "utf8"
         );
 
-        const project = stitch.project(projectId);
+        const project = stitchInstance.project(projectId);
         const screens = await project.screens();
 
         const originalScreen = screens.find(
@@ -1172,6 +1185,15 @@ app.post("/refine", authorize, async (req, res) => {
             details: error.message
         });
     } finally {
+        try {
+            await client.close();
+        } catch (error) {
+            console.warn(
+                "Nepavyko uždaryti Stitch kliento:",
+                error.message
+            );
+        }
+
         generationInProgress = false;
     }
 });

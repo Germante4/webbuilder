@@ -2,6 +2,9 @@ package lt.viko.eif.gbudreckyte.webbuilder.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import lt.viko.eif.gbudreckyte.webbuilder.dto.contact.ProjectContactRequest;
 
 import java.time.LocalDateTime;
 
@@ -51,6 +54,9 @@ public class Project {
     @Column(name = "generated_html", columnDefinition = "TEXT")
     private String generatedHtml;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "contact_information", columnDefinition = "jsonb")
+    private ProjectContactRequest contactInformation;
 
     @PrePersist
     public void prePersist() {

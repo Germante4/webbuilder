@@ -52,6 +52,107 @@ interface DesignCandidate {
 
 type DesignChoice = "CURRENT" | "NEW";
 
+function DesignComparisonPreview({
+  html,
+  title,
+}: {
+  html: string;
+  title: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const desktopWidth = 1440;
+  const desktopHeight = 900;
+  const scale = containerWidth
+    ? Math.min(containerWidth / desktopWidth, 1)
+    : 0;
+
+  return (
+    <>
+      <div className="comparison-preview-toolbar">
+        <span>Desktop · 1440 px</span>
+
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+        >
+          ⛶ Peržiūrėti visu dydžiu
+        </button>
+      </div>
+
+      <div
+        ref={containerRef}
+        className="comparison-preview-viewport"
+        style={{
+          height: scale
+            ? `${desktopHeight * scale}px`
+            : "280px",
+        }}
+      >
+        {scale > 0 && (
+          <iframe
+            title={title}
+            srcDoc={html}
+            sandbox="allow-scripts"
+            style={{
+              width: desktopWidth,
+              height: desktopHeight,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+          />
+        )}
+      </div>
+
+      {expanded && (
+        <div
+          className="comparison-fullscreen-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+        >
+          <div className="comparison-fullscreen-header">
+            <div>
+              <strong>{title}</strong>
+              <span>Desktop peržiūra</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+            >
+              ✕ Uždaryti
+            </button>
+          </div>
+
+          <div className="comparison-fullscreen-content">
+            <iframe
+              title={`${title} – pilna peržiūra`}
+              srcDoc={html}
+              sandbox="allow-scripts"
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ??
   "http://localhost:8080"
@@ -1041,12 +1142,10 @@ function ProjectPreviewPage() {
                       </span>
                     </div>
 
-                    <iframe
-                      title="Originalus dizainas"
-                      srcDoc={originalHtml}
-                      sandbox="allow-scripts"
-                      loading="lazy"
-                    />
+                    <DesignComparisonPreview
+  title="Versija A – esamas dizainas"
+  html={originalHtml}
+/>
 
                     <button
                       type="button"
@@ -1078,12 +1177,10 @@ function ProjectPreviewPage() {
                       </span>
                     </div>
 
-                    <iframe
-                      title="AI dizaino variantas"
-                      srcDoc={candidateHtml}
-                      sandbox="allow-scripts"
-                      loading="lazy"
-                    />
+                    <DesignComparisonPreview
+  title="Versija B – AI dizainas"
+  html={candidateHtml}
+/>
 
                     <button
                       type="button"

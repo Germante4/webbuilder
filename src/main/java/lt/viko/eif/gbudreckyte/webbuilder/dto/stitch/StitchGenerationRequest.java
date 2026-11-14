@@ -1,6 +1,7 @@
 
 package lt.viko.eif.gbudreckyte.webbuilder.dto.stitch;
 
+import lt.viko.eif.gbudreckyte.webbuilder.dto.contact.ProjectContactRequest;
 import lt.viko.eif.gbudreckyte.webbuilder.model.WebsiteCategory;
 
 public record StitchGenerationRequest(
@@ -8,6 +9,7 @@ public record StitchGenerationRequest(
         String projectName,
         String projectDescription,
         WebsiteCategory websiteCategory,
-        Long webBuilderProjectId
+        Long webBuilderProjectId,
+        ProjectContactRequest contactInformation
 ) {
 }
