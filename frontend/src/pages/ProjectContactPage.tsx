@@ -339,7 +339,7 @@ export default function ProjectContactPage() {
   function handleBack() {
     saveContacts();
 
-    navigate("/projects/new/value", {
+    navigate("/projects/new/content", {
       state: navigationState,
     });
   }

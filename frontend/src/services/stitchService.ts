@@ -1,4 +1,3 @@
-
 import { getToken } from "./authService";
 import type { ProjectSummary } from "./requirementService";
 import type { DesignSummary } from "./designSummaryService";
@@ -17,6 +16,11 @@ export interface StitchGenerationResponse {
   image: unknown;
   webBuilderProjectId?: number;
 }
+
+// ========================================
+// CONTACT INFORMATION
+// ========================================
+
 export interface ProjectContactInformation {
   email: string;
   phone: string;
@@ -27,6 +31,16 @@ export interface ProjectContactInformation {
     label: string;
     value: string;
   }[];
+}
+
+// ========================================
+// WEBSITE CONTENT
+// ========================================
+
+export interface WebsiteContent {
+  sections: Record<string, Record<string, string>[]>;
+  priorities: string[];
+  emphasis: string;
 }
 
 // ========================================
@@ -43,6 +57,8 @@ export interface StitchPromptRequest {
 
   selectedDirection?: string | null;
   uploadedAssets?: ProjectAssetUploadResponse | null;
+
+  websiteContent?: WebsiteContent | null;
 }
 
 // ========================================
@@ -83,6 +99,7 @@ export async function generateStitchPrompt(
         websiteLanguage: request.websiteLanguage,
         selectedDirection: request.selectedDirection ?? null,
         uploadedAssets: request.uploadedAssets ?? null,
+        websiteContent: request.websiteContent ?? null,
       }),
     }
   );
@@ -130,15 +147,15 @@ export async function generateStitchDesign(
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-  prompt: request.prompt,
-  projectName: request.projectName,
-  projectDescription: request.projectDescription,
-  websiteCategory: request.websiteCategory,
-  webBuilderProjectId:
-    request.webBuilderProjectId ?? null,
-  contactInformation:
-    request.contactInformation ?? null,
-}),
+        prompt: request.prompt,
+        projectName: request.projectName,
+        projectDescription: request.projectDescription,
+        websiteCategory: request.websiteCategory,
+        webBuilderProjectId:
+          request.webBuilderProjectId ?? null,
+        contactInformation:
+          request.contactInformation ?? null,
+      }),
     }
   );
 

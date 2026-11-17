@@ -11,6 +11,7 @@ public record StitchPromptRequest(
         String websiteFormat,
         String websiteLanguage,
         String selectedDirection,
-        ProjectAssetUploadResponse uploadedAssets
+        ProjectAssetUploadResponse uploadedAssets,
+        WebsiteContentRequest websiteContent
 ) {
 }

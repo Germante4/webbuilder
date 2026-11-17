@@ -202,13 +202,13 @@ function ProjectValuePage() {
         },
       });
 
-      navigate("/projects/new/contact", {
-        state: {
-          websiteCategory,
-          websiteFormat,
-          projectSummary: updatedProjectSummary,
-        },
-      });
+      navigate("/projects/new/content", {
+  state: {
+    websiteCategory,
+    websiteFormat,
+    projectSummary: updatedProjectSummary,
+  },
+});
     } catch (err) {
       console.error(
         "Nepavyko atnaujinti projekto santraukos:",

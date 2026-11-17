@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import HomePage from "./pages/HomePage";
@@ -8,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import CreateProjectPage from "./pages/CreateProjectPage";
 import ProjectDetailsPage from "./pages/ProjectDetailsPage";
 import ProjectValuePage from "./pages/ProjectValuePage";
+import ProjectContentPage from "./pages/ProjectContentPage";
 import ProjectContactPage from "./pages/ProjectContactPage";
 import ProjectDesignPage from "./pages/ProjectDesignPage";
 import ProjectDirectionsPage from "./pages/ProjectDirectionsPage";
@@ -35,6 +35,11 @@ function App() {
         <Route
           path="/projects/new/value"
           element={<ProjectValuePage />}
+        />
+
+        <Route
+          path="/projects/new/content"
+          element={<ProjectContentPage />}
         />
 
         <Route

@@ -17,6 +17,7 @@ import {
   generateStitchDesign,
   type StitchGenerationResponse,
   type ProjectContactInformation,
+  type WebsiteContent,
 } from "../services/stitchService";
 
 import "../styles/ProjectPreviewPage.css";
@@ -382,6 +383,43 @@ function isProjectContactInformation(
     )
   );
 }
+function isWebsiteContent(
+  value: unknown
+): value is WebsiteContent {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+
+  const content = value as Record<string, unknown>;
+
+  return (
+    typeof content.emphasis === "string" &&
+    Array.isArray(content.priorities) &&
+    content.priorities.every(
+      (item: unknown) => typeof item === "string"
+    ) &&
+    content.sections !== null &&
+    typeof content.sections === "object" &&
+    !Array.isArray(content.sections) &&
+    Object.values(content.sections).every(
+      (items) =>
+        Array.isArray(items) &&
+        items.every(
+          (item: unknown) =>
+            item !== null &&
+            typeof item === "object" &&
+            !Array.isArray(item) &&
+            Object.values(item).every(
+              (field) => typeof field === "string"
+            )
+        )
+    )
+  );
+}
 
 function ProjectPreviewPage() {
   const location = useLocation();
@@ -662,20 +700,42 @@ function ProjectPreviewPage() {
           ? "en"
           : "lt";
 
-      const prompt = await generateStitchPrompt({
-        projectSummary: state.projectSummary,
-        designSummary: state.designSummary,
-        websiteCategory:
-          state.websiteCategory ?? "SERVICES",
-        websiteFormat:
-          state.websiteFormat ?? "LANDING_PAGE",
-        websiteLanguage,
-        selectedDirection: JSON.stringify(
-          state.selectedDirection
-        ),
-        uploadedAssets:
-          state.uploadedAssets ?? null,
-      });
+const savedContent =
+  getProjectDraft().fields?.websiteContent;
+
+const websiteContent: WebsiteContent | null =
+  isWebsiteContent(savedContent)
+    ? savedContent
+    : null;
+
+console.log(
+  "WEBSITE CONTENT:",
+  websiteContent
+);
+
+const prompt = await generateStitchPrompt({
+  projectSummary: state.projectSummary,
+  designSummary: state.designSummary,
+
+  websiteCategory:
+    state.websiteCategory ?? "SERVICES",
+
+  websiteFormat:
+    state.websiteFormat ?? "LANDING_PAGE",
+
+  websiteLanguage,
+
+  selectedDirection: JSON.stringify(
+    state.selectedDirection
+  ),
+
+  uploadedAssets:
+    state.uploadedAssets ?? null,
+
+  websiteContent,
+});
+
+console.log("FINAL STITCH PROMPT:", prompt);
 
       const savedContact = getProjectDraft().fields?.projectContact;
 
