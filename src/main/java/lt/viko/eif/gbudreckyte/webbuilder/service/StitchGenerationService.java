@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+
 
 import java.util.Map;
 
@@ -26,8 +28,15 @@ public class StitchGenerationService {
             @Value("${stitch.internal.token}")
             String internalToken
     ) {
+        SimpleClientHttpRequestFactory requestFactory =
+                new SimpleClientHttpRequestFactory();
+
+        requestFactory.setConnectTimeout(30_000);
+        requestFactory.setReadTimeout(0);
+
         this.restClient = RestClient.builder()
                 .baseUrl(serviceUrl)
+                .requestFactory(requestFactory)
                 .build();
 
         this.internalToken = internalToken;

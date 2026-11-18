@@ -58,6 +58,21 @@ public class Project {
     @Column(name = "contact_information", columnDefinition = "jsonb")
     private ProjectContactRequest contactInformation;
 
+    // ========================================
+    // SVETAINĖS GENERAVIMO BŪSENA
+    // ========================================
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "generation_status")
+    private GenerationStatus generationStatus;
+
+    @Column(name = "generation_error", columnDefinition = "TEXT")
+    private String generationError;
+
+    // ========================================
+    // ENTITY LIFECYCLE
+    // ========================================
+
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();

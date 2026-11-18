@@ -1,4 +1,3 @@
-
 import express from "express";
 import * as cheerio from "cheerio";
 import { stitch, Stitch, StitchToolClient } from "@google/stitch-sdk";
@@ -27,7 +26,15 @@ const DATA_DIR = path.join(
 
 await mkdir(DATA_DIR, { recursive: true });
 
-let generationInProgress = false;
+let operationTail = Promise.resolve();
+
+async function acquireOperation() {
+    const previous = operationTail;
+    let release;
+    operationTail = new Promise(resolve => { release = resolve; });
+    await previous;
+    return release;
+}
 function createRefinementClient() {
     const client = new StitchToolClient({
         apiKey: API_KEY,
@@ -209,6 +216,22 @@ function validateArtifact(buffer, type) {
 // ========================================
 
 async function downloadStitchFile(rawUrl, type) {
+    const attempts = type === "html" ? 5 : 1;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await downloadStitchFileOnce(rawUrl, type);
+        } catch (error) {
+            const retryable = error.name === "TimeoutError" ||
+                error.name === "AbortError" || error instanceof TypeError ||
+                /HTTP (404|408|429|5\d\d)\b/.test(error.message);
+            if (!retryable || attempt >= attempts) throw error;
+            console.warn(`HTML download retry ${attempt}/${attempts}`);
+            await sleep(attempt * 5000);
+        }
+    }
+}
+
+async function downloadStitchFileOnce(rawUrl, type) {
     const url = validateDownloadUrl(rawUrl);
 
     const headers =
@@ -219,7 +242,7 @@ async function downloadStitchFile(rawUrl, type) {
     const response = await fetch(url, {
         headers,
         redirect: "error",
-        signal: AbortSignal.timeout(60000)
+        signal: AbortSignal.timeout(180_000)
     });
 
     if (!response.ok) {
@@ -428,8 +451,8 @@ function isImage(screen) {
 
 async function chooseWebsiteScreen(
     project,
-    attempts = 40,
-    delayMs = 3000
+    attempts = 180,
+    delayMs = 5000
 ) {
     let lastError = null;
     let lastScreens = [];
@@ -545,7 +568,7 @@ async function chooseWebsiteScreen(
 
 async function exportWebsite(
     projectId,
-    { attempts = 40 } = {}
+    { attempts = 180 } = {}
 ) {
     if (!safeId(String(projectId))) {
         throw new Error("Netinkamas projekto ID");
@@ -702,13 +725,7 @@ app.post(
             });
         }
 
-        if (generationInProgress) {
-            return res.status(409).json({
-                error: "Stitch generavimas jau vyksta"
-            });
-        }
-
-        generationInProgress = true;
+        const releaseOperation = await acquireOperation();
 
         let projectId = null;
 
@@ -717,6 +734,7 @@ app.post(
                 await stitch.createProject("WebBuilder");
 
             projectId = String(project.id);
+            console.log("STITCH PROJECT CREATED:", projectId);
 
             const generated = await project.generate(
                 makeWebsitePrompt(prompt),
@@ -753,7 +771,7 @@ app.post(
                 projectId
             });
         } finally {
-            generationInProgress = false;
+            releaseOperation();
         }
     }
 );
@@ -1062,17 +1080,13 @@ app.post("/refine", authorize, async (req, res) => {
         });
     }
 
-    if (generationInProgress) {
-        return res.status(409).json({
-            error: "Stitch operacija jau vyksta"
-        });
-    }
-
-    generationInProgress = true;
-
-    const { client, stitchInstance } = createRefinementClient();
+    const releaseOperation = await acquireOperation();
+    let client;
 
     try {
+        const refinement = createRefinementClient();
+        client = refinement.client;
+        const stitchInstance = refinement.stitchInstance;
         const originalMeta = await loadMeta(screenId);
 
         if (
@@ -1186,7 +1200,7 @@ app.post("/refine", authorize, async (req, res) => {
         });
     } finally {
         try {
-            await client.close();
+            await client?.close();
         } catch (error) {
             console.warn(
                 "Nepavyko uždaryti Stitch kliento:",
@@ -1194,7 +1208,7 @@ app.post("/refine", authorize, async (req, res) => {
             );
         }
 
-        generationInProgress = false;
+        releaseOperation();
     }
 });
 
@@ -1204,7 +1218,7 @@ app.post("/refine", authorize, async (req, res) => {
 // START SERVER
 // ========================================
 
-app.listen(
+const server = app.listen(
     PORT,
     "127.0.0.1",
     () => {
@@ -1213,3 +1227,5 @@ app.listen(
         );
     }
 );
+
+server.setTimeout(0);

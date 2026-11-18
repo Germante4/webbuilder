@@ -1,4 +1,3 @@
-
 package lt.viko.eif.gbudreckyte.webbuilder.service;
 
 import lt.viko.eif.gbudreckyte.webbuilder.dto.CreateProjectRequest;
@@ -7,6 +6,7 @@ import lt.viko.eif.gbudreckyte.webbuilder.dto.contact.ProjectContactRequest;
 
 import lt.viko.eif.gbudreckyte.webbuilder.model.Project;
 import lt.viko.eif.gbudreckyte.webbuilder.model.ProjectStatus;
+import lt.viko.eif.gbudreckyte.webbuilder.model.GenerationStatus;
 import lt.viko.eif.gbudreckyte.webbuilder.model.User;
 import lt.viko.eif.gbudreckyte.webbuilder.model.WebsiteCategory;
 
@@ -14,6 +14,7 @@ import lt.viko.eif.gbudreckyte.webbuilder.repository.ProjectRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -97,6 +98,13 @@ public class ProjectService {
     ) {
         Project project = getProjectById(id, owner);
 
+        if (isGenerationActive(project)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Negalima ištrinti generuojamo projekto."
+            );
+        }
+
         projectRepository.delete(project);
     }
 
@@ -137,6 +145,7 @@ public class ProjectService {
 
         // Jeigu Stitch ekranas jau išsaugotas,
         // antro projekto nekuriame.
+
         if (existingProject.isPresent()) {
 
             Project existing = existingProject.get();
@@ -150,7 +159,6 @@ public class ProjectService {
                 );
             }
 
-            // Atnaujiname kontaktus tik jeigu jie perduoti.
             if (contactInformation != null) {
                 existing.setContactInformation(
                         contactInformation
@@ -162,12 +170,12 @@ public class ProjectService {
             return existing;
         }
 
-        // Naujas projektas.
         Project project = Project.builder()
                 .name(name)
                 .description(description)
                 .websiteCategory(category)
                 .status(ProjectStatus.DRAFT)
+                .generationStatus(GenerationStatus.COMPLETED)
                 .stitchProjectId(stitchProjectId)
                 .stitchScreenId(stitchScreenId)
                 .generatedHtml(generatedHtml)
@@ -217,8 +225,6 @@ public class ProjectService {
             String stitchScreenId,
             String html
     ) {
-        // Paliekame ankstesnį metodą, kad nesugadintume
-        // kitų jau veikiančių jo iškvietimų.
         return updateGeneratedDesign(
                 project,
                 stitchProjectId,
@@ -235,6 +241,13 @@ public class ProjectService {
             String html,
             ProjectContactRequest contactInformation
     ) {
+        if (isGenerationActive(project)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Palaukite, kol bus baigtas generavimas."
+            );
+        }
+
         if (stitchScreenId == null ||
                 stitchScreenId.isBlank() ||
                 html == null ||
@@ -250,8 +263,12 @@ public class ProjectService {
         project.setStitchScreenId(stitchScreenId);
         project.setGeneratedHtml(html);
 
-        // Null reiškia, kad naujų kontaktų negavome.
-        // Tokiu atveju senųjų neištriname.
+        project.setGenerationStatus(GenerationStatus.COMPLETED);
+        project.setGenerationError(null);
+
+        // Jeigu naujų kontaktų negavome,
+        // išsaugome ankstesnius kontaktus.
+
         if (contactInformation != null) {
             project.setContactInformation(
                     contactInformation
@@ -259,5 +276,189 @@ public class ProjectService {
         }
 
         return projectRepository.save(project);
+    }
+
+    // =====================================================
+    // ASINCHRONINIS SVETAINĖS GENERAVIMAS
+    // PROJEKTO PARUOŠIMAS
+    // =====================================================
+
+    @Transactional
+    public Project prepareProjectForGeneration(
+            String name,
+            String description,
+            WebsiteCategory category,
+            Long existingProjectId,
+            User owner,
+            ProjectContactRequest contactInformation
+    ) {
+        Project project;
+
+        if (existingProjectId != null) {
+
+            project = getProjectById(
+                    existingProjectId,
+                    owner
+            );
+
+            if (isGenerationActive(project)) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Šis projektas jau generuojamas."
+                );
+            }
+
+        } else {
+
+            project = Project.builder()
+                    .name(name)
+                    .description(description)
+                    .websiteCategory(category)
+                    .status(ProjectStatus.DRAFT)
+                    .owner(owner)
+                    .build();
+        }
+
+        if (contactInformation != null) {
+            project.setContactInformation(
+                    contactInformation
+            );
+        }
+
+        project.setGenerationStatus(
+                GenerationStatus.PENDING
+        );
+
+        project.setGenerationError(null);
+
+        return projectRepository.save(project);
+    }
+
+    // =====================================================
+    // GENERAVIMO PRADŽIA
+    // =====================================================
+
+    @Transactional
+    public void markGenerationStarted(Long projectId) {
+
+        Project project = findGenerationProject(projectId);
+
+        if (project.getGenerationStatus() !=
+                GenerationStatus.PENDING) {
+
+            throw new IllegalStateException(
+                    "Projektas neparuoštas generavimui."
+            );
+        }
+
+        project.setGenerationStatus(
+                GenerationStatus.GENERATING
+        );
+
+        project.setGenerationError(null);
+
+        projectRepository.save(project);
+    }
+
+    // =====================================================
+    // SĖKMINGO GENERAVIMO REZULTATO IŠSAUGOJIMAS
+    // =====================================================
+
+    @Transactional
+    public Project completeGeneration(
+            Long projectId,
+            String stitchProjectId,
+            String stitchScreenId,
+            String html
+    ) {
+        if (stitchProjectId == null ||
+                stitchProjectId.isBlank() ||
+                stitchScreenId == null ||
+                stitchScreenId.isBlank() ||
+                html == null ||
+                html.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Trūksta sugeneruotos svetainės duomenų."
+            );
+        }
+
+        Project project = findGenerationProject(projectId);
+
+        if (project.getGenerationStatus() !=
+                GenerationStatus.GENERATING) {
+
+            throw new IllegalStateException(
+                    "Projektas šiuo metu negeneruojamas."
+            );
+        }
+
+        project.setStitchProjectId(stitchProjectId);
+        project.setStitchScreenId(stitchScreenId);
+        project.setGeneratedHtml(html);
+
+        project.setGenerationStatus(
+                GenerationStatus.COMPLETED
+        );
+
+        project.setGenerationError(null);
+
+        return projectRepository.save(project);
+    }
+
+    // =====================================================
+    // NESĖKMINGAS GENERAVIMAS
+    // =====================================================
+
+    @Transactional
+    public void markGenerationFailed(
+            Long projectId,
+            String error
+    ) {
+        Project project = findGenerationProject(projectId);
+
+        if (!isGenerationActive(project)) {
+            return;
+        }
+
+        project.setGenerationStatus(
+                GenerationStatus.FAILED
+        );
+
+        project.setGenerationError(
+                error != null && !error.isBlank()
+                        ? error
+                        : "Nepavyko sugeneruoti svetainės."
+        );
+
+        // Ankstesnio HTML neištriname.
+        // Jeigu projektas jau turėjo dizainą,
+        // jis išliks net ir nepavykus naujam generavimui.
+
+        projectRepository.save(project);
+    }
+
+    // =====================================================
+    // PAGALBINIAI METODAI
+    // =====================================================
+
+    private Project findGenerationProject(Long projectId) {
+
+        return projectRepository.findById(projectId)
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "Generuojamas projektas nerastas."
+                        )
+                );
+    }
+
+    private boolean isGenerationActive(Project project) {
+
+        GenerationStatus status =
+                project.getGenerationStatus();
+
+        return status == GenerationStatus.PENDING ||
+                status == GenerationStatus.GENERATING;
     }
 }
