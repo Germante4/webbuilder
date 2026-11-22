@@ -87,3 +87,104 @@
 
   pointer-events: none;
 }
+
+/* ========================================
+   ASYNCHRONOUS GENERATION STATUS
+   ======================================== */
+
+/* Laukia generavimo */
+
+.dashboard-project-status.generation-pending {
+  color: #8a6a37;
+  background: #f5eddd;
+}
+
+/* Generuojama */
+
+.dashboard-project-status.generation-generating {
+  color: #466c85;
+  background: #e7eff4;
+}
+
+/* Svetainė paruošta */
+
+.dashboard-project-status.generation-completed {
+  color: #49725b;
+  background: #e6efe8;
+}
+
+/* Generavimas nepavyko */
+
+.dashboard-project-status.generation-failed {
+  color: #a34f52;
+  background: #f8e8e8;
+}
+
+/* ========================================
+   GENERATION PLACEHOLDERS
+   ======================================== */
+
+.dashboard-preview-fallback strong {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--text-primary, #282525);
+}
+
+.dashboard-preview-fallback small {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Švelnus judėjimas generavimo metu */
+
+.dashboard-project-card:has(.generation-generating) .dashboard-preview-lines i {
+  animation: dashboard-generating 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes dashboard-generating {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.9;
+  }
+}
+
+/* ========================================
+   DASHBOARD GENERATION NOTICES
+   ======================================== */
+
+.dashboard-projects>p[role="status"] {
+  margin: 0 0 22px;
+  padding: 13px 17px;
+  border: 1px solid #dce6eb;
+  border-radius: 10px;
+  background: #f0f5f7;
+  color: #466c85;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dashboard-projects>p[role="alert"] {
+  margin: 0 0 22px;
+  padding: 13px 17px;
+  border: 1px solid #f0dada;
+  border-radius: 10px;
+  background: #fbf0f0;
+  color: #a34f52;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-project-card:has(.generation-generating) .dashboard-preview-lines i {
+    animation: none;
+  }
+}

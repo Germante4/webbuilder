@@ -1,3 +1,4 @@
+
 import { getToken } from "./authService";
 import type { ProjectSummary } from "./requirementService";
 import type { DesignSummary } from "./designSummaryService";
@@ -6,15 +7,33 @@ import type { ProjectAssetUploadResponse } from "./projectAssetService";
 const API_URL = "http://localhost:8080/api";
 
 // ========================================
+// GENERATION STATUS
+// ========================================
+
+export type StitchGenerationStatus =
+  | "PENDING"
+  | "GENERATING"
+  | "COMPLETED"
+  | "FAILED";
+
+// ========================================
 // STITCH RESPONSE
 // ========================================
 
+// Atsakymas, kai generavimas paleidžiamas fone.
 export interface StitchGenerationResponse {
-  projectId: string;
-  screenId: string;
-  html: unknown;
-  image: unknown;
-  webBuilderProjectId?: number;
+  webBuilderProjectId: number;
+  generationStatus: StitchGenerationStatus;
+  message: string;
+}
+
+// Atsakymas tikrinant generavimo būseną.
+export interface StitchGenerationStatusResponse {
+  webBuilderProjectId: number;
+  generationStatus: StitchGenerationStatus | null;
+  generationError: string | null;
+  projectId: string | null;
+  screenId: string | null;
 }
 
 // ========================================
@@ -75,22 +94,36 @@ export interface StitchDesignRequest {
 }
 
 // ========================================
+// AUTH HEADERS
+// ========================================
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getToken();
+
+  if (!token) {
+    throw new Error(
+      "Prisijunkite, kad galėtumėte naudotis svetaine."
+    );
+  }
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+// ========================================
 // GENERATE STITCH PROMPT
 // ========================================
 
 export async function generateStitchPrompt(
   request: StitchPromptRequest
 ): Promise<string> {
-  const token = getToken();
-
   const response = await fetch(
     `${API_URL}/stitch-prompt/generate`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         projectSummary: request.projectSummary,
         designSummary: request.designSummary,
@@ -120,32 +153,27 @@ export async function generateStitchPrompt(
 
   const data: { prompt: string } = await response.json();
 
+  if (!data.prompt?.trim()) {
+    throw new Error(
+      "Nepavyko gauti sugeneruoto svetainės aprašymo."
+    );
+  }
+
   return data.prompt;
 }
 
 // ========================================
-// GENERATE AND SAVE WEBSITE
+// START WEBSITE GENERATION
 // ========================================
 
 export async function generateStitchDesign(
   request: StitchDesignRequest
 ): Promise<StitchGenerationResponse> {
-  const token = getToken();
-
-  if (!token) {
-    throw new Error(
-      "Prisijunkite, kad galėtumėte generuoti svetainę."
-    );
-  }
-
   const response = await fetch(
     `${API_URL}/stitch/generate`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         prompt: request.prompt,
         projectName: request.projectName,
@@ -169,9 +197,70 @@ export async function generateStitchDesign(
     );
 
     throw new Error(
-      `Nepavyko sugeneruoti ir išsaugoti svetainės (${response.status})`
+      `Nepavyko pradėti svetainės generavimo (${response.status})`
     );
   }
 
-  return response.json();
+  const data: StitchGenerationResponse =
+    await response.json();
+
+  if (
+    !Number.isInteger(data.webBuilderProjectId) ||
+    data.webBuilderProjectId <= 0
+  ) {
+    throw new Error(
+      "Serveris negrąžino tinkamo WebBuilder projekto ID."
+    );
+  }
+
+  return data;
+}
+
+// ========================================
+// CHECK WEBSITE GENERATION STATUS
+// ========================================
+
+export async function getStitchGenerationStatus(
+  webBuilderProjectId: number
+): Promise<StitchGenerationStatusResponse> {
+  if (
+    !Number.isInteger(webBuilderProjectId) ||
+    webBuilderProjectId <= 0
+  ) {
+    throw new Error("Neteisingas projekto ID.");
+  }
+
+  const response = await fetch(
+    `${API_URL}/stitch/generation-status/${webBuilderProjectId}`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    console.error(
+      "Stitch generation status error:",
+      response.status,
+      errorText
+    );
+
+    throw new Error(
+      `Nepavyko patikrinti svetainės generavimo būsenos (${response.status})`
+    );
+  }
+
+  const data: StitchGenerationStatusResponse =
+    await response.json();
+
+  if (data.webBuilderProjectId !== webBuilderProjectId) {
+    throw new Error(
+      "Serveris grąžino kito projekto generavimo būseną."
+    );
+  }
+
+  return data;
 }

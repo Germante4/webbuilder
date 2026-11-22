@@ -15,12 +15,14 @@ import { getToken } from "../services/authService";
 import {
   generateStitchPrompt,
   generateStitchDesign,
-  type StitchGenerationResponse,
+  getStitchGenerationStatus,
+  type StitchGenerationStatus,
   type ProjectContactInformation,
   type WebsiteContent,
 } from "../services/stitchService";
 
 import "../styles/ProjectPreviewPage.css";
+import WebsiteGenerationScreen from "../components/WebsiteGenerationScreen";
 
 // ========================================
 // TYPES
@@ -44,6 +46,8 @@ interface SavedProject {
   stitchProjectId: string | null;
   stitchScreenId: string | null;
   generatedHtml?: string | null;
+  generationStatus?: StitchGenerationStatus | null;
+  generationError?: string | null;
 }
 
 interface DesignCandidate {
@@ -55,6 +59,13 @@ interface DesignCandidate {
 }
 
 type DesignChoice = "CURRENT" | "NEW";
+
+interface PreviewResult {
+  projectId: string;
+  screenId: string;
+}
+
+const GENERATION_POLL_INTERVAL_MS = 5000;
 
 function DesignComparisonPreview({
   html,
@@ -443,7 +454,7 @@ function ProjectPreviewPage() {
     useState(false);
 
   const [result, setResult] =
-    useState<StitchGenerationResponse | null>(null);
+    useState<PreviewResult | null>(null);
 
   const [
     webBuilderProjectId,
@@ -488,7 +499,13 @@ function ProjectPreviewPage() {
   const [reloadHtml, setReloadHtml] =
     useState(0);
 
+  const [generationStatus, setGenerationStatus] =
+    useState<StitchGenerationStatus | null>(null);
+  const [generationError, setGenerationError] = useState("");
+
   const busyRef = useRef(false);
+  const generationActive =
+    generationStatus === "PENDING" || generationStatus === "GENERATING";
 
   const canGenerate = Boolean(
     state?.projectSummary &&
@@ -520,21 +537,24 @@ function ProjectPreviewPage() {
       .then((project) => {
         if (controller.signal.aborted) return;
 
-        if (!project.stitchScreenId) {
-          throw new Error(
-            "Projektas dar neturi sugeneruotos svetainės."
-          );
-        }
-
         setWebBuilderProjectId(project.id);
+        setGenerationStatus(project.generationStatus ?? (
+          project.stitchScreenId ? "COMPLETED" : null
+        ));
+        setGenerationError(project.generationError ?? "");
 
-        setResult({
-          projectId: project.stitchProjectId ?? "",
-          screenId: project.stitchScreenId,
-          html: null,
-          image: null,
-          webBuilderProjectId: project.id,
-        });
+        if (project.stitchScreenId) {
+          setResult({
+            projectId: project.stitchProjectId ?? "",
+            screenId: project.stitchScreenId,
+          });
+        } else if (
+          project.generationStatus !== "PENDING" &&
+          project.generationStatus !== "GENERATING" &&
+          project.generationStatus !== "FAILED"
+        ) {
+          setError("Projektas dar neturi sugeneruotos svetainės.");
+        }
 
         if (project.generatedHtml?.trim()) {
           setOriginalHtml(project.generatedHtml);
@@ -560,6 +580,66 @@ function ProjectPreviewPage() {
     state?.webBuilderProjectId,
     state?.openSavedProject,
   ]);
+
+  // ========================================
+  // POLL GENERATION STATUS
+  // ========================================
+
+  useEffect(() => {
+    if (!webBuilderProjectId || !generationActive) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const checkStatus = async () => {
+      try {
+        const status = await getStitchGenerationStatus(webBuilderProjectId);
+        if (cancelled) return;
+
+        setGenerationStatus(status.generationStatus);
+        setGenerationError(status.generationError ?? "");
+
+        if (status.generationStatus === "COMPLETED") {
+          if (!status.screenId) {
+            setError("Generavimas baigtas, bet nerastas svetainės ekrano ID.");
+            return;
+          }
+
+          setResult({
+            projectId: status.projectId ?? "",
+            screenId: status.screenId,
+          });
+          setReloadHtml((value) => value + 1);
+          setNotice("Svetainė sugeneruota ir išsaugota.");
+          setError("");
+          return;
+        }
+
+        if (status.generationStatus === "FAILED") {
+          setError(status.generationError || "Svetainės generavimas nepavyko.");
+          return;
+        }
+
+        if (status.generationStatus === "PENDING" ||
+            status.generationStatus === "GENERATING") {
+          timer = setTimeout(checkStatus, GENERATION_POLL_INTERVAL_MS);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        // Laikinas tinklo sutrikimas neturi nutraukti generavimo stebėjimo.
+        console.error("Generation status polling error:", err);
+        setNotice("Nepavyko patikrinti būsenos. Bandysime dar kartą.");
+        timer = setTimeout(checkStatus, GENERATION_POLL_INTERVAL_MS);
+      }
+    };
+
+    void checkStatus();
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [webBuilderProjectId, generationActive]);
 
   // ========================================
   // LOAD ORIGINAL HTML
@@ -630,7 +710,7 @@ function ProjectPreviewPage() {
   // ========================================
 
   useEffect(() => {
-    if (!webBuilderProjectId || !result) {
+    if (!webBuilderProjectId || !result || generationActive) {
       return;
     }
 
@@ -665,6 +745,7 @@ function ProjectPreviewPage() {
   }, [
     webBuilderProjectId,
     result?.screenId,
+    generationActive,
   ]);
 
   // ========================================
@@ -683,7 +764,7 @@ function ProjectPreviewPage() {
       return;
     }
 
-    if (busyRef.current || refining || choosing) {
+    if (busyRef.current || generationActive || refining || choosing) {
       return;
     }
 
@@ -754,33 +835,16 @@ const generated = await generateStitchDesign({
   contactInformation,
 });
 
-      if (generated.webBuilderProjectId == null) {
-        throw new Error(
-          "Serveris negrąžino projekto ID."
-        );
-      }
-
-      if (!generated.screenId) {
-        throw new Error(
-          "Stitch negrąžino ekrano ID."
-        );
-      }
-
-      setWebBuilderProjectId(
-        generated.webBuilderProjectId
-      );
-
-      setResult(generated);
-
+      setWebBuilderProjectId(generated.webBuilderProjectId);
+      setGenerationStatus(generated.generationStatus);
+      setGenerationError("");
+      setResult(null);
       setOriginalHtml(null);
       setCandidateHtml(null);
       setDesignInstruction("");
       setDesignConfirmed(false);
-
-      setReloadHtml((value) => value + 1);
-
       setNotice(
-        "Svetainės dizainas sugeneruotas ir išsaugotas."
+        "Generavimas pradėtas. Galite grįžti į projektų sąrašą – darbas tęsis serveryje."
       );
     } catch (err) {
       setError(
@@ -925,10 +989,6 @@ const generated = await generateStitchDesign({
     }
   };
 
-  const imageUrl =
-    typeof result?.image === "string"
-      ? result.image
-      : null;
 
   // ========================================
   // RENDER
@@ -992,15 +1052,18 @@ const generated = await generateStitchDesign({
               className="stitch-preview-retry"
               disabled={
                 loading ||
+                generationActive ||
                 refining ||
                 choosing ||
                 Boolean(candidateHtml)
               }
               onClick={() => void handleGenerate()}
             >
-              {result
-                ? "Generuoti dizainą iš naujo"
-                : "Generuoti dizainą"}
+              {generationActive
+                ? "Dizainas generuojamas..."
+                : result
+                  ? "Generuoti dizainą iš naujo"
+                  : "Generuoti dizainą"}
             </button>
           )}
         </section>
@@ -1015,6 +1078,8 @@ const generated = await generateStitchDesign({
 
         {!canGenerate &&
           !result &&
+          !generationActive &&
+          generationStatus !== "FAILED" &&
           !restoring &&
           !error && (
             <div
@@ -1025,6 +1090,16 @@ const generated = await generateStitchDesign({
               Grįžkite į dizaino kūrimo etapą.
             </div>
           )}
+
+        {(generationStatus === "PENDING" || generationStatus === "GENERATING") && (
+          <WebsiteGenerationScreen status={generationStatus} />
+        )}
+
+        {generationStatus === "FAILED" && generationError && !error && (
+          <div className="stitch-preview-error" role="alert">
+            {generationError}
+          </div>
+        )}
 
         {notice && (
           <p role="status">{notice}</p>
@@ -1080,14 +1155,6 @@ const generated = await generateStitchDesign({
                   <DesktopWebsitePreview
                     html={originalHtml}
                     screenId={result.screenId}
-                  />
-                </div>
-              ) : imageUrl ? (
-                <div className="stitch-preview-image-container">
-                  <img
-                    src={imageUrl}
-                    alt="Sugeneruota svetainė"
-                    className="stitch-preview-image"
                   />
                 </div>
               ) : (
