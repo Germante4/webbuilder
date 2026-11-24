@@ -471,15 +471,14 @@ function ProjectPreviewPage() {
   const [candidateHtml, setCandidateHtml] =
     useState<string | null>(null);
 
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [designFinalized, setDesignFinalized] = useState(false);
+
   const [
     designInstruction,
     setDesignInstruction,
   ] = useState("");
 
-  const [
-    designConfirmed,
-    setDesignConfirmed,
-  ] = useState(false);
 
   const [error, setError] =
     useState("");
@@ -512,6 +511,15 @@ function ProjectPreviewPage() {
     state?.designSummary &&
     state?.selectedDirection
   );
+
+  // Po pasirinkimo dizaino koregavimo forma nebebus rodoma.
+  // Išsaugome šio žingsnio būseną ir po puslapio perkrovimo.
+  useEffect(() => {
+    if (!webBuilderProjectId) return;
+    setDesignFinalized(
+      localStorage.getItem(`wb-design-finalized-${webBuilderProjectId}`) === "true"
+    );
+  }, [webBuilderProjectId]);
 
   // ========================================
   // RESTORE SAVED PROJECT
@@ -723,9 +731,8 @@ function ProjectPreviewPage() {
       .then((candidate) => {
         if (controller.signal.aborted) return;
 
-        setCandidateHtml(
-  candidate?.html ?? null
-);
+        setCandidateHtml(candidate?.html ?? null);
+        if (candidate?.html) setComparisonOpen(true);
         if (candidate?.instruction) {
           setDesignInstruction(
             candidate.instruction
@@ -842,7 +849,9 @@ const generated = await generateStitchDesign({
       setOriginalHtml(null);
       setCandidateHtml(null);
       setDesignInstruction("");
-      setDesignConfirmed(false);
+      setDesignFinalized(false);
+      setComparisonOpen(false);
+      localStorage.removeItem(`wb-design-finalized-${generated.webBuilderProjectId}`);
       setNotice(
         "Generavimas pradėtas. Galite grįžti į projektų sąrašą – darbas tęsis serveryje."
       );
@@ -891,12 +900,11 @@ const generated = await generateStitchDesign({
     setRefining(true);
     setDesignError("");
     setDesignNotice("");
-    setDesignConfirmed(false);
 
     try {
       await refineDesign(
         webBuilderProjectId,
-        instruction
+        `${instruction}\n\nSvarbu: koreguok tik vizualinį dizainą (spalvas, šriftus, išdėstymą, tarpus, mygtukų stilių). Išlaikyk esamus tekstus, nuotraukas, jų šaltinius, nuorodas ir kontaktinius duomenis. Nepridėk ir nepašalink turinio.`
       );
 
       const candidate = await fetchCandidate(
@@ -910,9 +918,10 @@ const generated = await generateStitchDesign({
       }
 
       setCandidateHtml(candidate.html);
+      setComparisonOpen(true);
 
       setDesignNotice(
-        "AI dizaino variantas paruoštas. Palyginkite abu variantus."
+        "AI dizaino variantas paruoštas. Pasirinkite norimą versiją atsidariusiame lange."
       );
     } catch (err) {
       setDesignError(
@@ -970,8 +979,10 @@ const generated = await generateStitchDesign({
       }
 
       setCandidateHtml(null);
+      setComparisonOpen(false);
       setDesignInstruction("");
-      setDesignConfirmed(true);
+      setDesignFinalized(true);
+      localStorage.setItem(`wb-design-finalized-${webBuilderProjectId}`, "true");
 
       setDesignNotice(
         choice === "NEW"
@@ -1021,7 +1032,7 @@ const generated = await generateStitchDesign({
         </Link>
 
         <div className="stitch-preview-step">
-  07 / Dizaino peržiūra
+  07 / Dizaino koregavimas
 </div>
       </header>
 
@@ -1040,10 +1051,8 @@ const generated = await generateStitchDesign({
           </h1>
 
           <p className="stitch-preview-description">
-            Peržiūrėkite sugeneruotą svetainę,
-            patobulinkite jos dizainą su AI
-            ir pasirinkite labiausiai patinkantį
-            variantą.
+            Peržiūrėkite svetainės išvaizdą, koreguokite ją su DI
+            ir pasirinkite labiausiai patinkantį dizaino variantą.
           </p>
 
           {!restoring && canGenerate && (
@@ -1188,27 +1197,26 @@ const generated = await generateStitchDesign({
 
         {result && originalHtml && (
           <section className="design-editor">
-            <div className="design-editor-heading">
+            {!designFinalized && <div className="design-editor-heading">
               <span className="design-editor-eyebrow">
-                02 / DIZAINO TOBULINIMAS
+                02 / DIZAINO KOREGAVIMAS
               </span>
 
               <h2>
-                Patobulinkite savo dizainą.
+                Norite pakoreguoti dizainą?
               </h2>
 
               <p>
-                Norėtumėte pakeisti spalvas,
-                šriftus ar svetainės išdėstymą?
-                Aprašykite pageidaujamus
-                pakeitimus ir AI paruoš
-                naują dizaino variantą.
+                Aprašykite, ką norite pakeisti: spalvas, šriftus,
+                išdėstymą ar bendrą vizualinį stilių.
+                DI sukurs alternatyvų variantą, o jūs nuspręsite,
+                kurį dizainą palikti.
               </p>
-            </div>
+            </div>}
 
-            <div className="design-editor-form">
+            {!designFinalized && <div className="design-editor-form">
               <label htmlFor="design-instruction">
-                Kokius pakeitimus norite atlikti?
+                Ką norite pakeisti svetainės dizaine?
               </label>
 
               <textarea
@@ -1218,9 +1226,8 @@ const generated = await generateStitchDesign({
                   setDesignInstruction(
                     event.target.value
                   );
-                  setDesignConfirmed(false);
                 }}
-                placeholder="Pavyzdžiui: pakeisk pagrindinės sekcijos foną į švelniai žalią, padidink antraštę ir suapvalink mygtukų kampus."
+                placeholder="Pavyzdžiui: pakeisk svetainės spalvas į švelnius žemės tonus, naudok elegantiškesnį šriftą ir suteik puslapiui daugiau erdvės. Išlaikyk esamą turinį."
                 rows={5}
                 maxLength={5000}
                 disabled={
@@ -1232,9 +1239,8 @@ const generated = await generateStitchDesign({
 
               <div className="design-editor-form-footer">
                 <span>
-                  Galite keisti spalvas,
-                  tipografiją, išdėstymą
-                  ir kitus vizualinius elementus.
+                  Šiame etape keičiama tik svetainės išvaizda.
+                  Esamas svetainės turinys išlieka nepakitęs.
                 </span>
 
                 <button
@@ -1252,10 +1258,10 @@ const generated = await generateStitchDesign({
                 >
                   {refining
                     ? "AI tobulina dizainą..."
-                    : "Generuoti pakeitimus"}
+                    : "Generuoti dizaino variantą"}
                 </button>
               </div>
-            </div>
+            </div>}
 
             {designError && (
               <p
@@ -1275,10 +1281,69 @@ const generated = await generateStitchDesign({
               </p>
             )}
 
-            {/* A / B COMPARISON */}
+            {!designFinalized && !candidateHtml && (
+              <div className="design-skip-refinement">
+<p>
+  Esamas dizainas jau tinka?
+  Palikite jį ir pereikite prie svetainės turinio koregavimo.
+</p>                <button type="button" className="design-next-button"
+                  onClick={() => {
+                    setDesignFinalized(true);
+                    if (webBuilderProjectId) localStorage.setItem(`wb-design-finalized-${webBuilderProjectId}`, "true");
+                  }}>
+                  Palikti esamą dizainą
+                </button>
+              </div>
+            )}
 
-            {candidateHtml && (
-              <div className="design-comparison">
+
+{/* NEXT STEP – CONTENT PERSONALIZATION */}
+
+{designFinalized && !candidateHtml && (
+  <div className="design-next-step">
+    <div>
+      <span className="design-editor-eyebrow">
+        KITAS ŽINGSNIS
+      </span>
+
+      <h3>Dizainas pasirinktas!</h3>
+
+      <p>
+        Jūsų svetainės dizainas išsaugotas.
+        Kitame etape galėsite redaguoti tekstus,
+        nuotraukas ir kontaktinę informaciją.
+      </p>
+    </div>
+
+    {webBuilderProjectId && (
+      <Link
+        to={`/projects/${webBuilderProjectId}/personalize`}
+        className="design-next-button"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textDecoration: "none",
+        }}
+      >
+        Tęsti į 8 etapą →
+      </Link>
+    )}
+  </div>
+)}
+
+          </section>
+        )}
+      </main>
+
+            {candidateHtml && comparisonOpen && (
+              <div className="design-choice-overlay" role="dialog" aria-modal="true" aria-label="Pasirinkite svetainės dizainą">
+                <div className="design-choice-modal">
+                  <div className="design-choice-modal-top">
+                    <span>DI DIZAINO PALYGINIMAS</span>
+                    <span>Pasirinkite vieną variantą</span>
+                  </div>
+                  <div className="design-comparison">
                 <div className="design-comparison-heading">
                   <span className="design-editor-eyebrow">
                     03 / DIZAINO PALYGINIMAS
@@ -1289,8 +1354,8 @@ const generated = await generateStitchDesign({
                   </h2>
 
                   <p>
-                    Palyginkite originalų dizainą
-                    ir AI atliktus pakeitimus.
+                    Palyginkite esamą dizainą
+                    ir DI pasiūlytą alternatyvą.
                     Pasirinktas variantas
                     bus išsaugotas jūsų projekte.
                   </p>
@@ -1315,7 +1380,7 @@ const generated = await generateStitchDesign({
 
                     <DesignComparisonPreview
   title="Versija A – esamas dizainas"
-  html={originalHtml}
+  html={originalHtml ?? ""}
 />
 
                     <button
@@ -1369,65 +1434,11 @@ const generated = await generateStitchDesign({
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* CONFIRM DESIGN */}
-
-            {!candidateHtml && (
-              <div className="design-next-step">
-                <div>
-                  <span className="design-editor-eyebrow">
-                    KITAS ŽINGSNIS
-                  </span>
-
-                  <h3>
-                    Ar dizainas jau toks,
-                    kokio norite?
-                  </h3>
-
-                  <p>
-                    Patvirtinę dizainą
-                    galėsite pereiti prie
-                    nuotraukų, tekstų
-                    ir kontaktinių duomenų
-                    personalizavimo.
-                  </p>
-                </div>
-
-                {!designConfirmed ? (
-                  <button
-                    type="button"
-                    className="design-next-button"
-                    disabled={
-                      refining ||
-                      choosing ||
-                      loading
-                    }
-                    onClick={() =>
-                      setDesignConfirmed(true)
-                    }
-                  >
-                    Patvirtinti dizainą
-                  </button>
-                ) : (
-                  <div className="design-next-confirmed">
-                    <strong>
-                      Dizainas patvirtintas
-                    </strong>
-
-                    <p>
-                      Galime pereiti prie
-                      svetainės turinio
-                      personalizavimo.
-                    </p>
                   </div>
-                )}
+                </div>
               </div>
             )}
-          </section>
-        )}
-      </main>
+
 
       {/* GENERATION MODAL */}
 

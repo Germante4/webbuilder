@@ -12,6 +12,7 @@ import ProjectContactPage from "./pages/ProjectContactPage";
 import ProjectDesignPage from "./pages/ProjectDesignPage";
 import ProjectDirectionsPage from "./pages/ProjectDirectionsPage";
 import ProjectPreviewPage from "./pages/ProjectPreviewPage";
+import ProjectPersonalizePage from "./pages/ProjectPersonalizePage";
 
 function App() {
   return (
@@ -61,6 +62,10 @@ function App() {
           path="/projects/new/preview"
           element={<ProjectPreviewPage />}
         />
+        <Route
+  path="/projects/:projectId/personalize"
+  element={<ProjectPersonalizePage />}
+/>
       </Routes>
     </BrowserRouter>
   );

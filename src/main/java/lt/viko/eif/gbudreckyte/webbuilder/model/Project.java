@@ -1,3 +1,4 @@
+
 package lt.viko.eif.gbudreckyte.webbuilder.model;
 
 import jakarta.persistence.*;
@@ -70,6 +71,17 @@ public class Project {
     private String generationError;
 
     // ========================================
+    // SVETAINĖS PERSONALIZAVIMAS
+    // ========================================
+
+    @Column(name = "personalized_html", columnDefinition = "TEXT")
+    private String personalizedHtml;
+
+    @Builder.Default
+    @Column(name = "personalization_version")
+    private Long personalizationVersion = 0L;
+
+    // ========================================
     // ENTITY LIFECYCLE
     // ========================================
 
@@ -82,6 +94,10 @@ public class Project {
 
         if (status == null) {
             status = ProjectStatus.DRAFT;
+        }
+
+        if (personalizationVersion == null) {
+            personalizationVersion = 0L;
         }
     }
 

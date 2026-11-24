@@ -1,0 +1,60 @@
+/* Dizaino A/B pasirinkimas atskirame modaliniame lange */
+.design-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(18, 20, 26, 0.78);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.design-choice-modal {
+  width: min(1250px, 100%);
+  max-height: min(92vh, 1050px);
+  overflow-y: auto;
+  border-radius: 20px;
+  padding: clamp(20px, 3vw, 40px);
+  background: #fff;
+  color: #242424;
+  box-shadow: 0 24px 90px rgba(0,0,0,.3);
+}
+.design-choice-modal-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  margin-bottom: 22px;
+  color: #777;
+}
+.design-choice-modal .design-comparison {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.design-choice-modal .design-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.design-choice-modal .design-version { min-width: 0; }
+.design-choice-modal .comparison-preview-viewport { overflow: hidden; }
+.design-skip-refinement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+.design-skip-refinement p { margin: 0; }
+@media (max-width: 760px) {
+  .design-choice-overlay { padding: 10px; }
+  .design-choice-modal { padding: 18px; max-height: 96vh; }
+  .design-choice-modal .design-comparison-grid { grid-template-columns: 1fr; }
+  .design-choice-modal-top { flex-direction: column; }
+}

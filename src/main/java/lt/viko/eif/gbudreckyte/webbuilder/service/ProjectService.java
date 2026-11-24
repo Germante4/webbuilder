@@ -17,6 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.LockModeType;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -24,6 +28,9 @@ import java.util.Optional;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public ProjectService(ProjectRepository projectRepository) {
         this.projectRepository = projectRepository;
@@ -71,16 +78,36 @@ public class ProjectService {
                 );
     }
 
+    @Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY
+    )
+    public Project getProjectByIdForUpdate(
+            Long id,
+            User owner
+    ) {
+        Project project = projectRepository
+                .findByIdAndOwnerForUpdate(id, owner)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Projektas nerastas."
+                        )
+                );
+        entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
+        return project;
+    }
+
     // =====================================================
     // PROJEKTO ATNAUJINIMAS
     // =====================================================
 
+    @Transactional
     public Project updateProject(
             Long id,
             UpdateProjectRequest request,
             User owner
     ) {
-        Project project = getProjectById(id, owner);
+        Project project = getProjectByIdForUpdate(id, owner);
 
         project.setName(request.name());
         project.setDescription(request.description());
@@ -92,11 +119,12 @@ public class ProjectService {
     // PROJEKTO IŠTRYNIMAS
     // =====================================================
 
+    @Transactional
     public void deleteProject(
             Long id,
             User owner
     ) {
-        Project project = getProjectById(id, owner);
+        Project project = getProjectByIdForUpdate(id, owner);
 
         if (isGenerationActive(project)) {
             throw new ResponseStatusException(
@@ -112,6 +140,7 @@ public class ProjectService {
     // SUGENERUOTOS SVETAINĖS IŠSAUGOJIMAS
     // =====================================================
 
+    @Transactional
     public Project saveGeneratedProject(
             String name,
             String description,
@@ -149,6 +178,14 @@ public class ProjectService {
         if (existingProject.isPresent()) {
 
             Project existing = existingProject.get();
+            entityManager.refresh(existing, LockModeType.PESSIMISTIC_WRITE);
+
+            if (!stitchScreenId.equals(existing.getStitchScreenId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Projekto dizainas pasikeitė. Pakartokite užklausą."
+                );
+            }
 
             if (!existing.getOwner().getId()
                     .equals(owner.getId())) {
@@ -160,6 +197,10 @@ public class ProjectService {
             }
 
             if (contactInformation != null) {
+                if (isGenerationActive(existing)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Palaukite, kol bus baigtas generavimas.");
+                }
                 existing.setContactInformation(
                         contactInformation
                 );
@@ -219,6 +260,7 @@ public class ProjectService {
     // SUGENERUOTO DIZAINO ATNAUJINIMAS
     // =====================================================
 
+    @Transactional
     public Project updateGeneratedDesign(
             Project project,
             String stitchProjectId,
@@ -234,6 +276,7 @@ public class ProjectService {
         );
     }
 
+    @Transactional
     public Project updateGeneratedDesign(
             Project project,
             String stitchProjectId,
@@ -241,6 +284,8 @@ public class ProjectService {
             String html,
             ProjectContactRequest contactInformation
     ) {
+        project = getProjectByIdForUpdate(project.getId(), project.getOwner());
+
         if (isGenerationActive(project)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -262,6 +307,8 @@ public class ProjectService {
         project.setStitchProjectId(stitchProjectId);
         project.setStitchScreenId(stitchScreenId);
         project.setGeneratedHtml(html);
+
+        resetPersonalization(project);
 
         project.setGenerationStatus(GenerationStatus.COMPLETED);
         project.setGenerationError(null);
@@ -296,7 +343,7 @@ public class ProjectService {
 
         if (existingProjectId != null) {
 
-            project = getProjectById(
+            project = getProjectByIdForUpdate(
                     existingProjectId,
                     owner
             );
@@ -398,6 +445,8 @@ public class ProjectService {
         project.setStitchScreenId(stitchScreenId);
         project.setGeneratedHtml(html);
 
+        resetPersonalization(project);
+
         project.setGenerationStatus(
                 GenerationStatus.COMPLETED
         );
@@ -443,9 +492,22 @@ public class ProjectService {
     // PAGALBINIAI METODAI
     // =====================================================
 
+    private void resetPersonalization(Project project) {
+
+        project.setPersonalizedHtml(null);
+
+        Long currentVersion = project.getPersonalizationVersion();
+
+        project.setPersonalizationVersion(
+                currentVersion == null
+                        ? 1L
+                        : currentVersion + 1L
+        );
+    }
+
     private Project findGenerationProject(Long projectId) {
 
-        return projectRepository.findById(projectId)
+        return projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() ->
                         new IllegalStateException(
                                 "Generuojamas projektas nerastas."

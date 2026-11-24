@@ -1048,17 +1048,45 @@ function applyDomOperations(html, operations) {
                 elements.removeAttr(op.attr_name);
                 break;
 
+
             case "set_text":
                 if (typeof op.content !== "string") {
                     throw new Error("Nenurodytas tekstas");
                 }
+
                 elements.text(op.content);
                 break;
+
+            case "replace_element": {
+                const replacementHtml =
+                    typeof op.content === "string"
+                        ? op.content
+                        : typeof op.html === "string"
+                            ? op.html
+                            : typeof op.outer_html === "string"
+                                ? op.outer_html
+                                : null;
+
+                if (!replacementHtml?.trim()) {
+                    console.error(
+                        "STITCH REPLACE ELEMENT OPERATION:",
+                        op
+                    );
+
+                    throw new Error(
+                        "Stitch replace_element operacija neturi HTML turinio"
+                    );
+                }
+
+                elements.replaceWith(replacementHtml);
+                break;
+            }
 
             default:
                 throw new Error(
                     `Nepalaikoma DOM operacija: ${op.action}`
                 );
+
         }
     }
 

@@ -576,83 +576,6 @@
   }
 }
 
-.website-image-editor {
-  padding: 28px 24px;
-  background: #ffffff;
-  border-top: 1px solid #e5e5e5;
-}
-
-.website-image-editor h3 {
-  margin: 0 0 8px;
-  font-size: 20px;
-  font-weight: 600;
-  color: #222;
-}
-
-.website-image-editor > p {
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 24px;
-}
-
-.website-image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 18px;
-}
-
-.website-image-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  background: #fafafa;
-}
-
-.website-image-card > img {
-  width: 100%;
-  height: 150px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-.website-image-card strong {
-  font-size: 14px;
-  color: #222;
-}
-
-.website-image-upload {
-  display: block;
-  padding: 11px 12px;
-  border-radius: 8px;
-  background: #222;
-  color: white;
-  font-size: 13px;
-  text-align: center;
-  cursor: pointer;
-}
-
-.website-image-upload:hover {
-  background: #444;
-}
-
-.website-image-upload:has(input:disabled) {
-  opacity: 0.5;
-  cursor: wait;
-}
-
-.website-image-upload input {
-  display: none;
-}
-
-.website-image-message {
-  margin-top: 18px;
-  font-size: 14px;
-  color: #333;
-}
-
 /* DESIGN EDITOR */
 
 .design-editor {
@@ -1066,6 +989,93 @@
 
   .comparison-preview-toolbar {
     flex-wrap: wrap;
+  }
+}
+/* Dizaino A/B pasirinkimas atskirame modaliniame lange */
+.design-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(18, 20, 26, 0.78);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.design-choice-modal {
+  width: min(1250px, 100%);
+  max-height: min(92vh, 1050px);
+  overflow-y: auto;
+  border-radius: 20px;
+  padding: clamp(20px, 3vw, 40px);
+  background: #fff;
+  color: #242424;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, .3);
+}
+
+.design-choice-modal-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  margin-bottom: 22px;
+  color: #777;
+}
+
+.design-choice-modal .design-comparison {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.design-choice-modal .design-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.design-choice-modal .design-version {
+  min-width: 0;
+}
+
+.design-choice-modal .comparison-preview-viewport {
+  overflow: hidden;
+}
+
+.design-skip-refinement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+.design-skip-refinement p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .design-choice-overlay {
+    padding: 10px;
+  }
+
+  .design-choice-modal {
+    padding: 18px;
+    max-height: 96vh;
+  }
+
+  .design-choice-modal .design-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .design-choice-modal-top {
+    flex-direction: column;
   }
 }
 
