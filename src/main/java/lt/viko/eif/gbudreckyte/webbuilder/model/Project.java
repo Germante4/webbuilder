@@ -1,4 +1,3 @@
-
 package lt.viko.eif.gbudreckyte.webbuilder.model;
 
 import jakarta.persistence.*;
@@ -59,20 +58,12 @@ public class Project {
     @Column(name = "contact_information", columnDefinition = "jsonb")
     private ProjectContactRequest contactInformation;
 
-    // ========================================
-    // SVETAINĖS GENERAVIMO BŪSENA
-    // ========================================
-
     @Enumerated(EnumType.STRING)
     @Column(name = "generation_status")
     private GenerationStatus generationStatus;
 
     @Column(name = "generation_error", columnDefinition = "TEXT")
     private String generationError;
-
-    // ========================================
-    // SVETAINĖS PERSONALIZAVIMAS
-    // ========================================
 
     @Column(name = "personalized_html", columnDefinition = "TEXT")
     private String personalizedHtml;
@@ -81,14 +72,15 @@ public class Project {
     @Column(name = "personalization_version")
     private Long personalizationVersion = 0L;
 
-    // ========================================
-    // ENTITY LIFECYCLE
-    // ========================================
+    @Column(name = "netlify_site_id", unique = true)
+    private String netlifySiteId;
+
+    @Column(name = "published_url")
+    private String publishedUrl;
 
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
-
         createdAt = now;
         updatedAt = now;
 

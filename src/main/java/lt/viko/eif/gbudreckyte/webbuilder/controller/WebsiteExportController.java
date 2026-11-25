@@ -17,6 +17,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -55,14 +57,18 @@ public class WebsiteExportController {
     private final String netlifyToken;
     private final String netlifySite;
     private final String publishProjectId;
+    private final TransactionTemplate transactions;
 
     private record WebsiteArchive(byte[] html, Map<String, Path> assets) {}
+    private record NetlifySite(String id, String name) {}
+    private record SiteBinding(String id, String url) {}
     private record NetlifyDeploy(String id, String state) {}
     public record Publication(String url, boolean ready) {}
 
     public WebsiteExportController(
             ProjectService projectService,
             ProjectAssetService projectAssetService,
+            PlatformTransactionManager transactionManager,
             @Value("${NETLIFY_AUTH_TOKEN:}") String netlifyToken,
             @Value("${NETLIFY_SITE_HOST:}") String netlifySite,
             @Value("${NETLIFY_WEBBUILDER_PROJECT_ID:}") String publishProjectId
@@ -72,6 +78,7 @@ public class WebsiteExportController {
         this.netlifyToken = netlifyToken;
         this.netlifySite = netlifySite;
         this.publishProjectId = publishProjectId;
+        this.transactions = new TransactionTemplate(transactionManager);
         var requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build());
@@ -94,7 +101,7 @@ public class WebsiteExportController {
                 .filename("svetaine-" + projectId + ".zip")
                 .build().toString());
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        writeArchive(archive, response.getOutputStream());
+        writeArchive(archive, response.getOutputStream(), false);
     }
 
     @PostMapping("/api/projects/{id}/publish")
@@ -102,20 +109,20 @@ public class WebsiteExportController {
             @PathVariable("id") Long projectId,
             Authentication authentication
     ) throws IOException {
-        if (!projectId.toString().equals(publishProjectId)
-                || netlifyToken.isBlank()
-                || !netlifySite.matches("[a-z0-9][a-z0-9-]*\\.netlify\\.app")) {
+        WebsiteArchive archive = buildArchive(projectId, authentication);
+        if (netlifyToken.isBlank()) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Šiam projektui Netlify publikavimas nesukonfigūruotas.");
+                    HttpStatus.SERVICE_UNAVAILABLE, "Netlify prieigos raktas nesukonfigūruotas.");
         }
 
-        WebsiteArchive archive = buildArchive(projectId, authentication);
+        User owner = (User) authentication.getPrincipal();
         Path temporaryZip = Files.createTempFile("webbuilder-site-", ".zip");
 
         try {
-            writeArchive(archive, Files.newOutputStream(temporaryZip));
+            writeArchive(archive, Files.newOutputStream(temporaryZip), true);
+            SiteBinding site = resolveSite(projectId, owner);
             NetlifyDeploy deploy = netlify.post()
-                    .uri("/sites/{site}/deploys", netlifySite)
+                    .uri("/sites/{site}/deploys", site.id())
                     .headers(headers -> headers.setBearerAuth(netlifyToken))
                     .contentType(MediaType.parseMediaType("application/zip"))
                     .body(new FileSystemResource(temporaryZip))
@@ -125,7 +132,7 @@ public class WebsiteExportController {
             if (deploy == null || deploy.id() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Netlify negrąžino publikavimo ID.");
             }
-            return awaitPublication(deploy);
+            return awaitPublication(deploy, site.url());
         } catch (RestClientException error) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY, "Netlify užklausa nepavyko. Patikrinkite projekto adresą ir prieigos raktą.");
@@ -134,8 +141,48 @@ public class WebsiteExportController {
         }
     }
 
-    private Publication awaitPublication(NetlifyDeploy deploy) {
-        String url = "https://" + netlifySite;
+    private SiteBinding resolveSite(Long projectId, User owner) {
+        return transactions.execute(transaction -> {
+            Project project = projectService.getProjectByIdForUpdate(projectId, owner);
+            if (project.getNetlifySiteId() != null) {
+                return new SiteBinding(project.getNetlifySiteId(), project.getPublishedUrl());
+            }
+
+            NetlifySite site;
+            if (projectId.toString().equals(publishProjectId)) {
+                if (!netlifySite.matches("[a-z0-9][a-z0-9-]*\\.netlify\\.app")) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT, "Nurodykite esamos Netlify svetainės adresą.");
+                }
+                site = netlify.get()
+                        .uri("/sites/{site}", netlifySite)
+                        .headers(headers -> headers.setBearerAuth(netlifyToken))
+                        .retrieve()
+                        .body(NetlifySite.class);
+            } else {
+                site = netlify.post()
+                        .uri("/sites")
+                        .headers(headers -> headers.setBearerAuth(netlifyToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of())
+                        .retrieve()
+                        .body(NetlifySite.class);
+            }
+
+            if (site == null || site.id() == null || site.id().isBlank()
+                    || site.name() == null || !site.name().matches("[a-z0-9][a-z0-9-]*")) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY, "Netlify negrąžino svetainės ID arba adreso.");
+            }
+
+            String url = "https://" + site.name() + ".netlify.app";
+            project.setNetlifySiteId(site.id());
+            project.setPublishedUrl(url);
+            return new SiteBinding(site.id(), url);
+        });
+    }
+
+    private Publication awaitPublication(NetlifyDeploy deploy, String url) {
 
         for (int attempt = 0; ; attempt++) {
             if ("ready".equals(deploy.state())) return new Publication(url, true);
@@ -205,11 +252,22 @@ public class WebsiteExportController {
         return new WebsiteArchive(document.outerHtml().getBytes(StandardCharsets.UTF_8), assets);
     }
 
-    private void writeArchive(WebsiteArchive archive, OutputStream output) throws IOException {
+    private void writeArchive(WebsiteArchive archive, OutputStream output, boolean forNetlify) throws IOException {
         try (ZipOutputStream zip = new ZipOutputStream(output)) {
             zip.putNextEntry(new ZipEntry("index.html"));
             zip.write(archive.html());
             zip.closeEntry();
+
+            if (forNetlify) {
+                zip.putNextEntry(new ZipEntry("_headers"));
+                zip.write("""
+                        /
+                          Content-Type: text/html; charset=UTF-8
+                        /index.html
+                          Content-Type: text/html; charset=UTF-8
+                        """.getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
 
             for (Map.Entry<String, Path> asset : archive.assets().entrySet()) {
                 zip.putNextEntry(new ZipEntry(asset.getKey()));
