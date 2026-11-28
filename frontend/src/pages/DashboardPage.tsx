@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -13,6 +12,10 @@ const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ??
   "http://localhost:8080"
 ).replace(/\/$/, "");
+
+function isPublished(project: Project) {
+  return Boolean(project.lastPublishedAt && project.publishedUrl);
+}
 
 const POLLING_INTERVAL = 5000;
 
@@ -244,6 +247,22 @@ function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshError, setRefreshError] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState<{
+    projectId: number;
+    message: string;
+  } | null>(null);
+
+  async function copyPublishedUrl(projectId: number, url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyFeedback({ projectId, message: "Nuoroda nukopijuota." });
+    } catch {
+      setCopyFeedback({ projectId, message: "Nepavyko nukopijuoti. Atidarykite svetainę ir nukopijuokite adresą." });
+    }
+  }
+
+  const [showPublished, setShowPublished] = useState(false);
+  const visibleProjects = projects.filter((project) => isPublished(project) === showPublished);
 
   const hasActiveGeneration = projects.some(isGenerating);
 
@@ -355,7 +374,17 @@ function DashboardPage() {
     navigate("/login", { replace: true });
   };
 
-  const openProject = (id: number) => {
+  const openProject = (project: Project) => {
+    const { id } = project;
+    if (!isGenerating(project) && project.generationStatus !== "FAILED" && (
+      isPublished(project) ||
+      localStorage.getItem(`wb-personalize-visited-${id}`) === "true" ||
+      localStorage.getItem(`wb-design-finalized-${id}`) === "true"
+    )) {
+      navigate(`/projects/${id}/personalize`);
+      return;
+    }
+
     navigate("/projects/new/preview", {
       state: {
         webBuilderProjectId: id,
@@ -379,7 +408,7 @@ function DashboardPage() {
         </Link>
 
         <div className="dashboard-nav">
-          <span>Mano projektai</span>
+          <span>Mano svetainės</span>
 
           <button
             type="button"
@@ -394,7 +423,7 @@ function DashboardPage() {
         <div className="dashboard-top">
           <div>
             <p className="dashboard-label">
-              MANO PROJEKTAI
+              MANO SVETAINĖS
             </p>
 
             <h1>
@@ -416,20 +445,29 @@ function DashboardPage() {
             className="dashboard-new-button"
           >
             <span>+</span>
-            Naujas projektas
+            Nauja svetainė
           </Link>
         </div>
 
-        <section className="dashboard-projects">
+        <section className="dashboard-projects dashboard-project-panel">
           <div className="dashboard-section-header">
-            <h2>Projektai</h2>
+            <h2>Svetainės</h2>
 
             <span>
-              {projects.length}{" "}
-              {projects.length === 1
-                ? "projektas"
-                : "projektų"}
+              {visibleProjects.length}{" "}
+              {visibleProjects.length === 1
+                ? "svetainė"
+                : "svetainės"}
             </span>
+          </div>
+
+          <div className="dashboard-project-switch" role="group" aria-label="Projektų rodinys">
+            <button type="button" aria-pressed={!showPublished} onClick={() => setShowPublished(false)}>
+              Redaguojamos
+            </button>
+            <button type="button" aria-pressed={showPublished} onClick={() => setShowPublished(true)}>
+              Paskelbtos
+            </button>
           </div>
 
           {hasActiveGeneration && (
@@ -455,7 +493,7 @@ function DashboardPage() {
               <h3>Nepavyko įkelti duomenų</h3>
               <p role="alert">{error}</p>
             </div>
-          ) : projects.length === 0 ? (
+          ) : projects.length === 0 && !showPublished ? (
             <div className="dashboard-empty">
               <div className="dashboard-empty-icon">
                 +
@@ -472,78 +510,111 @@ function DashboardPage() {
                 Sukurti pirmą projektą →
               </Link>
             </div>
+          ) : visibleProjects.length === 0 ? (
+            <div className="dashboard-empty">
+              <p>{showPublished ? "Dar nėra paskelbtų svetainių." : "Šiuo metu nėra redaguojamų projektų."}</p>
+            </div>
           ) : (
             <div className="dashboard-project-grid">
-              {projects.map((project) => (
+              {visibleProjects.map((project) => (
                 <article
                   className="dashboard-project-card"
                   key={project.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={
-                    `Atidaryti projektą ${project.name}`
-                  }
-                  onClick={() =>
-                    openProject(project.id)
-                  }
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === "Enter" ||
-                      event.key === " "
-                    ) {
-                      event.preventDefault();
-                      openProject(project.id);
-                    }
-                  }}
                 >
-                  <ProjectThumbnail
-                    project={project}
-                  />
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      `Atidaryti projektą ${project.name}`
+                    }
+                    onClick={() =>
+                      openProject(project)
+                    }
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" ||
+                        event.key === " "
+                      ) {
+                        event.preventDefault();
+                        openProject(project);
+                      }
+                    }}
+                  >
+                    <ProjectThumbnail
+                      project={project}
+                    />
 
-                  <div className="dashboard-project-info">
-                    <div className="dashboard-project-meta">
-                      <span>
-                        {categoryLabels[
-                          project.websiteCategory ?? ""
-                        ] ?? "Svetainė"}
-                      </span>
+                    <div className="dashboard-project-info">
+                      <div className="dashboard-project-meta">
+                        <span>
+                          {categoryLabels[
+                            project.websiteCategory ?? ""
+                          ] ?? "Svetainė"}
+                        </span>
 
-                      <span
-                        className={
-                          `dashboard-project-status ` +
-                          getProjectStatusClass(project)
-                        }
-                      >
-                        {getProjectStatusLabel(project)}
-                      </span>
-                    </div>
+                        <span
+                          className={
+                            `dashboard-project-status ` +
+                            getProjectStatusClass(project)
+                          }
+                        >
+                          {getProjectStatusLabel(project)}
+                        </span>
+                      </div>
 
-                    <h3>{project.name}</h3>
+                      <h3>{project.name}</h3>
 
-                    {project.description && (
-                      <p>{project.description}</p>
-                    )}
-
-                    {project.generationStatus ===
-                      "FAILED" &&
-                      project.generationError && (
-                        <p role="status">
-                          {project.generationError}
-                        </p>
+                      {project.description && (
+                        <p>{project.description}</p>
                       )}
 
-                    <div className="dashboard-project-bottom">
-                      <span>
-                        {new Date(
-                          project.updatedAt
-                        ).toLocaleDateString("lt-LT")}
-                      </span>
+                      {project.generationStatus ===
+                        "FAILED" &&
+                        project.generationError && (
+                          <p role="status">
+                            {project.generationError}
+                          </p>
+                        )}
 
-                      <span className="dashboard-project-arrow">
-                        ↗
-                      </span>
+                      <div className="dashboard-project-bottom">
+                        <span>
+                          {new Date(
+                            project.updatedAt
+                          ).toLocaleDateString("lt-LT")}
+                        </span>
+
+                        <span className="dashboard-project-arrow">
+                          ↗
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  {project.lastPublishedAt && project.publishedUrl && (
+                    <div className="dashboard-project-info">
+                      <p><strong>Paskelbta</strong></p>
+                      <div className="dashboard-project-meta">
+                        <a href={project.publishedUrl} target="_blank" rel="noopener noreferrer">
+                          Atidaryti svetainę
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (project.publishedUrl) {
+                              void copyPublishedUrl(project.id, project.publishedUrl);
+                            }
+                          }}
+                        >
+                          Kopijuoti nuorodą
+                        </button>
+                        <Link to={`/projects/${project.id}/personalize`}>
+                          Redaguoti svetainę
+                        </Link>
+                      </div>
+                      {copyFeedback?.projectId === project.id && (
+                        <p role="status">{copyFeedback.message}</p>
+                      )}
+                    </div>
+                  )}
                 </article>
               ))}
             </div>

@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -132,7 +133,14 @@ public class WebsiteExportController {
             if (deploy == null || deploy.id() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Netlify negrąžino publikavimo ID.");
             }
-            return awaitPublication(deploy, site.url());
+            Publication publication = awaitPublication(deploy, site.url());
+            if (publication.ready()) {
+                transactions.executeWithoutResult(transaction -> {
+                    Project project = projectService.getProjectByIdForUpdate(projectId, owner);
+                    project.setLastPublishedAt(LocalDateTime.now());
+                });
+            }
+            return publication;
         } catch (RestClientException error) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY, "Netlify užklausa nepavyko. Patikrinkite projekto adresą ir prieigos raktą.");

@@ -3,6 +3,7 @@ package lt.viko.eif.gbudreckyte.webbuilder.controller;
 import jakarta.validation.Valid;
 import lt.viko.eif.gbudreckyte.webbuilder.dto.CreateProjectRequest;
 import lt.viko.eif.gbudreckyte.webbuilder.dto.ProjectResponse;
+import lt.viko.eif.gbudreckyte.webbuilder.dto.UpdateProjectRequest;
 import lt.viko.eif.gbudreckyte.webbuilder.model.Project;
 import lt.viko.eif.gbudreckyte.webbuilder.model.User;
 import lt.viko.eif.gbudreckyte.webbuilder.service.ProjectService;
@@ -10,8 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import lt.viko.eif.gbudreckyte.webbuilder.dto.UpdateProjectRequest;
-
 
 import java.util.List;
 
@@ -30,77 +29,31 @@ public class ProjectController {
             @Valid @RequestBody CreateProjectRequest request,
             Authentication authentication
     ) {
-
         User currentUser = (User) authentication.getPrincipal();
-
-        Project project = projectService.createProject(
-                request,
-                currentUser
-        );
-
-        ProjectResponse response = new ProjectResponse(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                project.getStatus(),
-                project.getWebsiteCategory(),
-                project.getCreatedAt(),
-                project.getUpdatedAt(),
-                project.getStitchProjectId(),
-                project.getStitchScreenId()
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(response);
+        Project project = projectService.createProject(request, currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ProjectResponse.fromProject(project));
     }
+
     @GetMapping
-    public ResponseEntity<List<ProjectResponse>> getProjects(
-            Authentication authentication
-    ) {
+    public ResponseEntity<List<ProjectResponse>> getProjects(Authentication authentication) {
         User currentUser = (User) authentication.getPrincipal();
-
-        List<ProjectResponse> projects = projectService
-                .getUserProjects(currentUser)
+        List<ProjectResponse> projects = projectService.getUserProjects(currentUser)
                 .stream()
-                .map(project -> new ProjectResponse(
-                        project.getId(),
-                        project.getName(),
-                        project.getDescription(),
-                        project.getStatus(),
-                        project.getWebsiteCategory(),
-                        project.getCreatedAt(),
-                        project.getUpdatedAt(),
-                        project.getStitchProjectId(),
-                        project.getStitchScreenId()
-                ))
+                .map(ProjectResponse::fromProject)
                 .toList();
-
         return ResponseEntity.ok(projects);
     }
+
     @GetMapping("/{id}")
     public ResponseEntity<ProjectResponse> getProjectById(
             @PathVariable Long id,
             Authentication authentication
     ) {
         User currentUser = (User) authentication.getPrincipal();
-
         Project project = projectService.getProjectById(id, currentUser);
-
-        ProjectResponse response = new ProjectResponse(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                project.getStatus(),
-                project.getWebsiteCategory(),
-                project.getCreatedAt(),
-                project.getUpdatedAt(),
-                project.getStitchProjectId(),
-                project.getStitchScreenId()
-        );
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ProjectResponse.fromProject(project));
     }
+
     @PutMapping("/{id}")
     public ResponseEntity<ProjectResponse> updateProject(
             @PathVariable Long id,
@@ -108,36 +61,14 @@ public class ProjectController {
             Authentication authentication
     ) {
         User currentUser = (User) authentication.getPrincipal();
-
-        Project project = projectService.updateProject(
-                id,
-                request,
-                currentUser
-        );
-
-        ProjectResponse response = new ProjectResponse(
-                project.getId(),
-                project.getName(),
-                project.getDescription(),
-                project.getStatus(),
-                project.getWebsiteCategory(),
-                project.getCreatedAt(),
-                project.getUpdatedAt(),
-                project.getStitchProjectId(),
-                project.getStitchScreenId()
-        );
-
-        return ResponseEntity.ok(response);
+        Project project = projectService.updateProject(id, request, currentUser);
+        return ResponseEntity.ok(ProjectResponse.fromProject(project));
     }
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteProject(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
+    public ResponseEntity<Void> deleteProject(@PathVariable Long id, Authentication authentication) {
         User currentUser = (User) authentication.getPrincipal();
-
         projectService.deleteProject(id, currentUser);
-
         return ResponseEntity.noContent().build();
     }
 }

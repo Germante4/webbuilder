@@ -78,6 +78,9 @@ public class Project {
     @Column(name = "published_url")
     private String publishedUrl;
 
+    @Column(name = "last_published_at")
+    private LocalDateTime lastPublishedAt;
+
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();

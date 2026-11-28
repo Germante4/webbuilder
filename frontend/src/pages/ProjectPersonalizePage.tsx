@@ -177,8 +177,6 @@ function PersonalizeContent({ projectId }: { projectId: string }) {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState("");
   const [publication, setPublication] = useState<{ url: string; ready: boolean } | null>(null);
@@ -195,7 +193,10 @@ function PersonalizeContent({ projectId }: { projectId: string }) {
           signal: controller.signal,
         });
         const result = await readPersonalization(response);
-        if (!controller.signal.aborted) setProject(result);
+        if (!controller.signal.aborted) {
+          localStorage.setItem(`wb-personalize-visited-${projectId}`, "true");
+          setProject(result);
+        }
       } catch (error) {
         if (!controller.signal.aborted) {
           setLoadError(error instanceof Error ? error.message : "Nepavyko įkelti svetainės.");
@@ -270,40 +271,10 @@ function PersonalizeContent({ projectId }: { projectId: string }) {
     }
   }
 
-  async function downloadWebsite() {
-    setExporting(true);
-    setExportError("");
-
-    try {
-      const response = await fetch(API_BASE + "/api/projects/" + projectId + "/export", {
-        headers: authorization(),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => null);
-        throw new Error(error?.message || "Nepavyko atsisiųsti svetainės (" + response.status + ").");
-      }
-
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "svetaine-" + projectId + ".zip";
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      setExportError(error instanceof Error ? error.message : "Nepavyko atsisiųsti svetainės.");
-    } finally {
-      setExporting(false);
-    }
-  }
-
   async function publishWebsite() {
     if (!window.confirm("Paskelbti išsaugotą svetainės versiją viešu Netlify adresu?")) return;
     setPublishing(true);
     setPublishError("");
-    setPublication(null);
     try {
       const response = await fetch(API_BASE + "/api/projects/" + projectId + "/publish", {
         method: "POST",
@@ -325,23 +296,34 @@ function PersonalizeContent({ projectId }: { projectId: string }) {
       <div className="personalize-panel-header">
         <h2 id="personalize-preview">Paspauskite tekstą arba nuotrauką</h2>
         <p id="personalize-guide">Pabrauktą tekstą galite perrašyti, o nuotrauką su kontūru – pakeisti įkeldami naują.</p>
-        <div className="personalize-dialog-actions">
-          <button type="button" disabled={saving || exporting || publishing} onClick={downloadWebsite}>
-            {exporting ? "Ruošiamas ZIP…" : "Atsisiųsti svetainę (ZIP)"}
-          </button>
-          <button type="button" disabled={saving || exporting || publishing} onClick={publishWebsite}>
-            {publishing ? "Skelbiama…" : "Paskelbti svetainę"}
-          </button>
-        </div>
-        {exportError && <p className="personalize-error" role="alert">{exportError}</p>}
-        {publishError && <p className="personalize-error" role="alert">{publishError}</p>}
-        {publication && (
-          <p role="status">
-            {publication.ready ? "Svetainė paskelbta. " : "Netlify dar apdoroja naują versiją. "}
-            <a href={publication.url} target="_blank" rel="noreferrer">Atidaryti svetainę</a>
-          </p>
-        )}
       </div>
+
+      <section className="personalize-publication" aria-labelledby="personalize-publication-title">
+        <div>
+          <h2 id="personalize-publication-title">Svetainės publikavimas</h2>
+          <p role="status">
+            {publishing
+              ? "Skelbiama naujausia išsaugota versija…"
+              : publication?.ready
+                ? "Svetainė paskelbta. Viešą nuorodą galite atidaryti žemiau."
+                : publication
+                  ? "„Netlify“ dar ruošia naują versiją."
+                  : "Paskelbkite išsaugotą svetainės versiją ir gaukite viešą nuorodą."}
+          </p>
+          {publishError && <p className="personalize-error" role="alert">{publishError}</p>}
+        </div>
+
+        <div className="personalize-publication-actions">
+          <button type="button" disabled={saving || publishing} onClick={publishWebsite}>
+            {publishing ? "Skelbiama…" : publication ? "Skelbti naują versiją" : "Paskelbti svetainę"}
+          </button>
+          {publication && (
+            <a href={publication.url} target="_blank" rel="noreferrer">
+              {publication.ready ? "Atidaryti svetainę" : "Tikrinti svetainę"} <span aria-hidden="true">↗</span>
+            </a>
+          )}
+        </div>
+      </section>
 
       <iframe
         ref={frame}
@@ -406,12 +388,8 @@ export default function ProjectPersonalizePage() {
   return (
     <div className="personalize-page">
       <header className="personalize-header">
-        <Link
-          className="personalize-back"
-          to={validProjectId ? "/projects/new/preview" : "/dashboard"}
-          state={validProjectId ? { webBuilderProjectId: Number(validProjectId), openSavedProject: true } : undefined}
-        >
-          ← Atgal
+        <Link className="personalize-back" to="/dashboard">
+          ← Mano projektai
         </Link>
         <Link className="personalize-logo" to="/">WebBuilder</Link>
         <span className="personalize-step">08 / Turinys</span>
@@ -431,3 +409,4 @@ export default function ProjectPersonalizePage() {
     </div>
   );
 }
+    
