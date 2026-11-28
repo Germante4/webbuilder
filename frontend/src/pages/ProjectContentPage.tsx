@@ -10,6 +10,7 @@ import {
   saveProjectDraft,
 } from "../services/projectDraftService";
 
+import { getToken } from "../services/authService";
 import type { ProjectSummary } from "../services/requirementService";
 
 import "../styles/ProjectContentPage.css";
@@ -340,7 +341,31 @@ function createEmptyItem(
   );
 }
 
+const BOOKING_CONTENT_IDS = new Set(["workingHours", "team", "portfolio", "testimonials", "faq", "other"]);
+
 function ProjectContentPage() {
+  const location = useLocation();
+  const state = location.state as { websiteType?: string } | null;
+  const isBooking = (state?.websiteType ?? getProjectDraft().fields?.websiteType) === "BOOKING";
+  const isServicesStep = new URLSearchParams(location.search).get("step") === "booking-services";
+
+  return isBooking && isServicesStep
+    ? <BookingServicesStep />
+    : <WebsiteContentStep isBooking={isBooking} />;
+}
+
+function WebsiteContentStep({ isBooking }: { isBooking: boolean }) {
+  const availableCategories = isBooking
+    ? CATEGORIES.filter(({ id }) => BOOKING_CONTENT_IDS.has(id)).map((category) =>
+        category.id === "workingHours"
+          ? {
+              ...category,
+              title: "Viešai rodomas darbo laikas",
+              description: "Rodomas svetainėje. Rezervuojamus laikus nustatysite atskirai.",
+            }
+          : category
+      )
+    : CATEGORIES;
   const navigate = useNavigate();
   const location = useLocation();
   const draft = getProjectDraft();
@@ -378,7 +403,7 @@ function ProjectContentPage() {
       : undefined;
 
   const [selected, setSelected] = useState<string[]>(
-    validSavedContent?.selected ?? []
+    (validSavedContent?.selected ?? []).filter((id) => !isBooking || BOOKING_CONTENT_IDS.has(id))
   );
 
   const [sections, setSections] = useState<
@@ -527,11 +552,12 @@ function ProjectContentPage() {
       },
     });
 
-    navigate("/projects/new/contact", {
+    navigate(isBooking ? "/projects/new/content?step=booking-services" : "/projects/new/contact", {
       state: {
         websiteCategory,
         websiteFormat,
         projectSummary,
+        websiteType: isBooking ? "BOOKING" : undefined,
       },
     });
   };
@@ -566,28 +592,41 @@ function ProjectContentPage() {
             04 / SUKURKIME SVETAINĖS TURINĮ
           </p>
 
-          <h1>
-            Ką norėtumėte parodyti
-            <br />
-            savo svetainėje?
-          </h1>
+          {isBooking ? (
+            <>
+              <h1>Ką klientai turėtų žinoti prieš rezervuodami?</h1>
+              <p className="content-description">
+                Pasirinkite, kokią informaciją rodyti svetainėje. Paslaugas,
+                jų trukmę ir kainas įvesite kitame žingsnyje.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1>
+                Ką norėtumėte parodyti
+                <br />
+                savo svetainėje?
+              </h1>
 
-          <p className="content-description">
-            Pasirinkite informaciją, kurią norėtumėte
-            pateikti savo svetainės lankytojams.
-            Kiekvienas verslas yra skirtingas, todėl
-            turinį galite pritaikyti pagal savo poreikius.
-          </p>
+              <p className="content-description">
+                Pasirinkite informaciją, kurią norėtumėte
+                pateikti savo svetainės lankytojams.
+                Kiekvienas verslas yra skirtingas, todėl
+                turinį galite pritaikyti pagal savo poreikius.
+              </p>
+            </>
+          )}
 
           <div className="content-info">
             <span className="content-info-icon">✦</span>
 
             <div>
-              <strong>Jūs sprendžiate, kas svarbu.</strong>
+              <strong>{isBooking ? "Šis žingsnis neprivalomas." : "Jūs sprendžiate, kas svarbu."}</strong>
 
               <p>
-                Pasirinkite tik jūsų veiklai aktualias
-                kategorijas. Šis etapas nėra privalomas.
+                {isBooking
+                  ? "Jei svetainėje papildomos informacijos nereikia, pereikite prie rezervuojamų paslaugų."
+                  : "Pasirinkite tik jūsų veiklai aktualias kategorijas. Šis etapas nėra privalomas."}
               </p>
             </div>
           </div>
@@ -600,7 +639,7 @@ function ProjectContentPage() {
           </div>
 
           <div className="content-category-grid">
-            {CATEGORIES.map((category) => {
+            {availableCategories.map((category) => {
               const isSelected = selected.includes(
                 category.id
               );
@@ -641,7 +680,7 @@ function ProjectContentPage() {
             </div>
 
             <div className="content-dynamic-sections">
-              {CATEGORIES.filter((category) =>
+              {availableCategories.filter((category) =>
                 selected.includes(category.id)
               ).map((category) => (
                 <div
@@ -819,7 +858,208 @@ function ProjectContentPage() {
             className="content-continue"
             onClick={handleContinue}
           >
-            Tęsti <span>→</span>
+            {isBooking ? "Toliau – rezervuojamos paslaugos" : "Tęsti"} <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+type BookingService = {
+  id: string;
+  name: string;
+  description: string;
+  duration: string;
+  price: string;
+  photos: string[];
+};
+
+const BOOKING_FIELDS = [
+  { key: "name", label: "Paslaugos pavadinimas", type: "text" },
+  { key: "description", label: "Aprašymas", type: "textarea" },
+  { key: "duration", label: "Trukmė minutėmis", type: "number" },
+  { key: "price", label: "Kaina (neprivaloma)", type: "text" },
+] as const;
+
+const ASSET_API = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "")
+  + "/api/project-assets";
+
+function newService(): BookingService {
+  return { id: crypto.randomUUID(), name: "", description: "", duration: "", price: "", photos: [] };
+}
+
+function BookingServicesStep() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const draft = getProjectDraft();
+  const state = location.state as {
+    websiteCategory?: string;
+    websiteFormat?: string;
+    projectSummary?: ProjectSummary;
+  } | null;
+  const category = state?.websiteCategory ?? draft.websiteCategory ?? "";
+  const routeState = { ...state, websiteType: "BOOKING" };
+  const [services, setServices] = useState<BookingService[]>(() => {
+    const saved = draft.fields?.bookingServicesDraft as { category: string; services: BookingService[] } | undefined;
+    return saved?.category === category && saved.services.length ? saved.services : [newService()];
+  });
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    saveProjectDraft({
+      fields: { ...getProjectDraft().fields, bookingServicesDraft: { category, services } },
+    });
+  }, [services, category]);
+
+  const ready = services.every(({ name, description, duration }) =>
+    name.trim() && description.trim() && /^[1-9][0-9]*$/.test(duration) && Number.isSafeInteger(Number(duration))
+  );
+
+  function update(id: string, change: Partial<BookingService>) {
+    setServices((previous) => previous.map((item) => item.id === id ? { ...item, ...change } : item));
+  }
+
+  async function uploadPhotos(service: BookingService, files: File[]) {
+    if (!files.length || uploading) return;
+    setUploading(service.id);
+    setError("");
+
+    try {
+      const token = getToken();
+      if (!token) throw new Error("Prisijunkite iš naujo.");
+      const body = new FormData();
+      files.forEach((file) => body.append("photos", file));
+      const response = await fetch(ASSET_API + "/upload", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+        body,
+      });
+      if (!response.ok) throw new Error("Nepavyko įkelti nuotraukų (" + response.status + ").");
+      const result: { photos?: string[] } = await response.json();
+      if (!result.photos?.length) throw new Error("Serveris negrąžino nuotraukų.");
+      update(service.id, { photos: [...service.photos, ...result.photos] });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nepavyko įkelti nuotraukų.");
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  function continueToContact() {
+    if (!ready || uploading) return;
+    const fields = getProjectDraft().fields;
+    const existing = fields?.websiteContent as {
+      sections?: Record<string, ContentItem[]>;
+      priorities?: string[];
+      emphasis?: string;
+    } | undefined;
+    const bookingServices = services.map((service) => ({
+      ...service,
+      name: service.name.trim(),
+      description: service.description.trim(),
+      price: service.price.trim(),
+    }));
+
+    saveProjectDraft({
+      fields: {
+        ...fields,
+        bookingServices,
+        websiteContent: {
+          priorities: existing?.priorities ?? [],
+          emphasis: existing?.emphasis ?? "",
+          sections: {
+            ...existing?.sections,
+            services: bookingServices.map(({ name, description, duration, price }) => ({
+              name, description, duration: duration + " min.", price,
+            })),
+          },
+        },
+      },
+    });
+    navigate("/projects/new/contact", { state: routeState });
+  }
+
+  return (
+    <div className="content-page">
+      <header className="content-header">
+        <Link to="/projects/new/content" state={routeState} className="content-back">← Svetainės turinys</Link>
+        <Link to="/" className="content-logo">WebBuilder</Link>
+        <span className="content-step">04 / Rezervuojamos paslaugos</span>
+      </header>
+      <main className="content-main">
+        <section className="content-intro">
+          <h1>Rezervuojamos paslaugos</h1>
+          <p className="content-description">Pridėkite paslaugas, kurias klientai galės rezervuoti.</p>
+        </section>
+        <section className="content-section" aria-label="Paslaugų sąrašas">
+          <div className="content-dynamic-sections">
+            {services.map((service, index) => (
+              <div className="content-dynamic-section" key={service.id}>
+                <div className="content-item-heading">
+                  <h2>Paslauga {index + 1}</h2>
+                  <button className="content-remove" type="button" disabled={services.length === 1 || Boolean(uploading)}
+                    onClick={() => setServices((previous) => previous.filter(({ id }) => id !== service.id))}>
+                    Pašalinti
+                  </button>
+                </div>
+                <div className="content-fields">
+                  {BOOKING_FIELDS.map(({ key, label, type }) => (
+                    <div className={type === "textarea" ? "content-field content-field-full" : "content-field"} key={key}>
+                      <label htmlFor={service.id + "-" + key}>{label}</label>
+                      {type === "textarea" ? (
+                        <textarea id={service.id + "-" + key} rows={3} value={service[key]}
+                          onChange={(event) => update(service.id, { [key]: event.target.value })} />
+                      ) : (
+                        <input id={service.id + "-" + key} type={type} value={service[key]}
+                          min={type === "number" ? 1 : undefined} step={type === "number" ? 1 : undefined}
+                          onChange={(event) => update(service.id, { [key]: event.target.value })} />
+                      )}
+                    </div>
+                  ))}
+                  <div className="content-field content-field-full">
+                    <label htmlFor={service.id + "-photos"}>Darbų nuotraukos (neprivaloma)</label>
+                    <input id={service.id + "-photos"} type="file" multiple accept=".jpg,.jpeg,.png,.webp"
+                      disabled={Boolean(uploading)}
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files ?? []);
+                        event.target.value = "";
+                        void uploadPhotos(service, files);
+                      }} />
+                    {uploading === service.id && <p role="status">Įkeliamos nuotraukos…</p>}
+                    {service.photos.length > 0 && (
+                      <ul>
+                        {service.photos.map((photo, photoIndex) => (
+                          <li key={photo}>
+                            <a href={ASSET_API + "/images/" + encodeURIComponent(photo)} target="_blank" rel="noreferrer">
+                              Nuotrauka {photoIndex + 1}
+                            </a>{" "}
+                            <button className="content-remove" type="button" disabled={Boolean(uploading)}
+                              onClick={() => update(service.id, { photos: service.photos.filter((item) => item !== photo) })}>
+                              Pašalinti
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {error && <p role="alert">{error}</p>}
+          <button className="content-add" type="button" onClick={() => setServices((previous) => [...previous, newService()])}>
+            + Pridėti paslaugą
+          </button>
+        </section>
+        <div className="content-footer">
+          <div className="content-footer-text">
+            <strong>Pavadinimas, aprašymas ir trukmė būtini.</strong>
+            <span>Laisvus laikus galėsite pridėti rezervacijų valdymo puslapyje.</span>
+          </div>
+          <button className="content-continue" type="button" disabled={!ready || Boolean(uploading)} onClick={continueToContact}>
+            Tęsti <span aria-hidden="true">→</span>
           </button>
         </div>
       </main>

@@ -650,7 +650,22 @@ async function exportWebsite(
 // WEBSITE PROMPT
 // ========================================
 
-function makeWebsitePrompt(prompt) {
+const WEBSITE_TYPE_INSTRUCTIONS = Object.freeze({
+    WEBSITE: `Present the supplied business, services and contact details.
+Use an appropriate contact call to action.`,
+    BOOKING: `Make reservations a prominent part of the design.
+Add a visible reservation section with exactly one id="reservations".
+Link the booking calls to action to #reservations.
+Leave room in that section for WebBuilder's live booking component.
+Do not hardcode available times or add a mock reservation form.`,
+    STORE: `Design a product showcase with exactly one id="products" for the catalog.
+Provide exactly one id="cart" where WebBuilder can insert its cart.
+Link the catalog and cart calls to action to #products and #cart.
+Use supplied product information. Leave live prices, stock and order submission
+to WebBuilder's components.`
+});
+
+function makeWebsitePrompt(prompt, websiteType = "WEBSITE") {
     return `
 You are a professional website UI designer.
 
@@ -665,6 +680,11 @@ Do not generate a standalone image,
 illustration, style guide, or unrelated screens.
 
 WEBSITE FORMAT: LANDING_PAGE
+WEBSITE TYPE: ${websiteType}
+
+TYPE-SPECIFIC REQUIREMENTS
+
+${WEBSITE_TYPE_INSTRUCTIONS[websiteType]}
 
 - One header with anchor navigation.
 - A carefully designed hero section.
@@ -713,7 +733,13 @@ app.post(
     "/generate",
     authorize,
     async (req, res) => {
-        const { prompt } = req.body ?? {};
+        const { prompt, websiteType = "WEBSITE" } = req.body ?? {};
+
+        if (typeof websiteType !== "string" || !Object.hasOwn(WEBSITE_TYPE_INSTRUCTIONS, websiteType)) {
+            return res.status(400).json({
+                error: "Netinkamas svetainės tipas"
+            });
+        }
 
         if (
             typeof prompt !== "string" ||
@@ -737,7 +763,7 @@ app.post(
             console.log("STITCH PROJECT CREATED:", projectId);
 
             const generated = await project.generate(
-                makeWebsitePrompt(prompt),
+                makeWebsitePrompt(prompt, websiteType),
                 "DESKTOP"
             );
 

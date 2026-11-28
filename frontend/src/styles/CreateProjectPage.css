@@ -267,3 +267,62 @@
 .website-category-section .category-grid {
   margin-top: 0;
 }
+.create-type-section {
+  margin-bottom: clamp(28px, 5vw, 48px);
+}
+
+.create-type-section h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.create-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr));
+  gap: 12px;
+}
+
+.create-type-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 108px;
+  padding: 18px 20px;
+  border: 1px solid var(--border, #e2d9d3);
+  border-radius: 14px;
+  background: var(--surface, #faf6f0);
+  color: var(--text, #241a1d);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.create-type-card strong {
+  font-size: 16px;
+}
+
+.create-type-card span,
+.create-type-note {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.create-type-card:is(:hover, :focus-visible) {
+  border-color: var(--primary, #582437);
+}
+
+.create-type-card[aria-pressed="true"] {
+  border-color: var(--primary, #582437);
+  background: var(--primary, #582437);
+  color: #fff9f4;
+}
+
+.create-type-card:focus-visible {
+  outline: 2px solid var(--primary, #582437);
+  outline-offset: 3px;
+}
+
+.create-type-note {
+  margin: 12px 0 0;
+  color: var(--text-secondary, #63595c);
+}
